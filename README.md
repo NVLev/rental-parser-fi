@@ -2,10 +2,10 @@
 ## Структура проекта
 
 ```
-helsinki-rental-parser/
+rental-parser-fi/
 │
 ├── app/                    # FastAPI backend
-│   ├── api/
+│   ├── routers/
 │   ├── parsers/
 │   ├── services/
 │   └── database/
