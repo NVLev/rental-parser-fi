@@ -42,6 +42,7 @@ class Listing(Base):
 
     # Коммунальные УСЛУГИ
     water_included: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    water_price: Mapped[Optional[float]]  # цена воды если не включена
     electricity_included: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Планировка
@@ -49,6 +50,10 @@ class Listing(Base):
 
     # Доступность
     available_from: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # IMMEDIATELY | дата
+
+    # Инфо об арендодателе
+    lessor_name: Mapped[Optional[str]]  # имя/название арендодателя
+    is_private_lessor: Mapped[Optional[bool]]
 
     # Мета
     published_at: Mapped[Optional[datetime]] = mapped_column(

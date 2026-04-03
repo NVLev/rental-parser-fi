@@ -16,7 +16,7 @@ class ListingBase(BaseModel):
     water_included: Optional[bool] = None
     electricity_included: Optional[bool] = None
 
-    floor_plan_url: Optional[HttpUrl] = None
+    floor_plan_url: Optional[str] = None
     available_from: Optional[str] = None
 
     published_at: Optional[datetime] = None
@@ -25,14 +25,14 @@ class ListingBase(BaseModel):
 class ListingCreate(ListingBase):
     external_id: str
     source: str
-    url: HttpUrl
+    url: str
 
 
 class ListingRead(ListingBase):
     id: int
     external_id: str
     source: str
-    url: HttpUrl
+    url: str
 
     scraped_at: datetime
     is_active: bool

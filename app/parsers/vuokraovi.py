@@ -144,18 +144,35 @@ class VuokraoviParser:
             return "IMMEDIATELY"
         return availability.get("vacancyDate")  # "2026-05-01"
 
-    def _parse_water(self, details: Dict) -> Optional[bool]:
+    def _parse_water(self, details: Dict) -> tuple[Optional[bool], Optional[float]]:
         charges = details.get("property", {}).get("periodicCharges", [])
         for charge in charges:
             if charge.get("periodicCharge") == "WATER":
-                return charge.get("includedInOverallCost")
-        return None  # информация не указана
+                included = charge.get("includedInOverallCost", False)
+                price = charge.get("price") if not included else None
+                return included, price
+
+        # Fallback на текстовое поле
+        info = (details.get("property", {}).get("periodicChargesAdditionalInfo") or "").lower()
+        if "water is available for rent" in info or "vesi sisältyy vuokraan" in info:
+            return True, None
+
+        return None, None
 
     def _parse_electricity(self, details: Dict) -> Optional[bool]:
         charges = details.get("property", {}).get("periodicCharges", [])
         for charge in charges:
             if charge.get("periodicCharge") == "ELECTRICITY":
-                return charge.get("includedInOverallCost")
+                return charge.get("includedInOverallCost", False)
+
+        # Fallback — парсим текстовое поле
+        additional_info = details.get("property", {}).get("periodicChargesAdditionalInfo", "") or ""
+        additional_info_lower = additional_info.lower()
+        if "sähkö sisältyy" in additional_info_lower or "electricity included" in additional_info_lower:
+            return True
+        if "vuokralainen tekee" in additional_info_lower or "tenant makes" in additional_info_lower:
+            return False
+
         return None
 
     def _parse_floor_plan_url(self, details: Dict) -> Optional[str]:
@@ -169,8 +186,27 @@ class VuokraoviParser:
         image_data = images.get(str(first_id), {})
         uri = image_data.get("image", {}).get("uri")
         if uri:
-            return f"https:{uri}".replace("{imageParameters}", "800x600")
+            return f"https:{uri}".replace("{imageParameters}", "1280x854,fit,q80,f=webp")
         return None
+
+    def _parse_district(self, details: Dict, fallback: Optional[str] = None) -> Optional[str]:
+        """Берёт subdistrict из деталей, fallback на addressLine2 из листинга."""
+        subdistrict = (
+            details.get("property", {})
+            .get("subdistrict", {})
+            .get("defaultName")
+        )
+        return subdistrict or fallback
+
+    def _parse_lessor(self, details: Dict) -> tuple[Optional[str], Optional[bool]]:
+        """Возвращает (имя арендодателя, является ли частником)."""
+        contact = details.get("announcementContactInfo", {})
+        is_private = contact.get("isPrivateLessor")
+        if is_private:
+            name = contact.get("name")
+        else:
+            name = contact.get("officeName")
+        return name, is_private
 
     def _parse_datetime(self, value: Optional[str]) -> Optional[datetime]:
         if not value:

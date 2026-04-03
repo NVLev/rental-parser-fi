@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserFilterBase(BaseModel):
@@ -13,8 +13,8 @@ class UserFilterBase(BaseModel):
     area_min: Optional[float] = None
     area_max: Optional[float] = None
 
-    districts: Optional[str] = None
-    room_counts: Optional[str] = None
+    districts: Optional[str] = Field(None, description="Районы через запятую: Kallio,Kamppi")
+    room_counts: Optional[str] = Field(None, description="ONE_ROOM,TWO_ROOMS,THREE_ROOMS")
 
     water_included_only: bool = False
 
