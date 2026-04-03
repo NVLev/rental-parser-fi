@@ -10,20 +10,16 @@ router = APIRouter(prefix="/listings", tags=["listings"])
 
 @router.post("/parse")
 async def parse_listings(
-    session: AsyncSession = Depends(db_helper.session_getter),
+        session: AsyncSession = Depends(db_helper.session_getter),
 ):
     """
     Запускает парсинг Vuokraovi и сохраняет данные в БД.
     """
-
-    parser = VuokraoviParser()
-
-    listings = await parser.parse()
+    async with VuokraoviParser() as parser:
+        listings = await parser.parse()
 
     service = ListingService(session)
     new_count = await service.upsert_listings(listings)
-
-    await parser.close()
 
     return {
         "parsed": len(listings),
