@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,7 @@ from app.services.listing_service import ListingService
 from app.database.schemas.listing import ListingRead
 from app.database.db_helper import db_helper
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/listings", tags=["listings"])
 
 
@@ -18,17 +20,22 @@ async def parse_listings(
     Запускает парсинг Vuokraovi и сохраняет данные в БД.
     """
     async with VuokraoviParser() as parser:
+        logger.info("Started VuokraoviParser")
         listings = await parser.parse()
 
     service = ListingService(session)
     new_count = await service.upsert_listings(listings)
 
+    parsed_ids = [l.external_id for l in listings]
+    deactivated = await service.deactivate_missing(parsed_ids, source="vuokraovi")
+
     return {
         "parsed": len(listings),
         "new": new_count,
+        "deactivated": deactivated,
     }
 
-@router.get("/", response_model=dict)
+@router.get("/", response_model=list[ListingRead])
 async def get_listings(
     session: AsyncSession = Depends(db_helper.session_getter),
     price_min: Optional[float] = Query(None, description="Минимальная цена €/мес"),
@@ -38,13 +45,14 @@ async def get_listings(
     district: Optional[str] = Query(None, description="Район, например Kallio"),
     room_count: Optional[str] = Query(None, description="ONE_ROOM / TWO_ROOMS / THREE_ROOMS"),
     water_included: Optional[bool] = Query(None, description="Вода включена в аренду"),
+    is_private_lessor: Optional[bool] = Query(None, description="True = частник, False = компания"),
     source: Optional[str] = Query(None, description="vuokraovi / sato"),
     limit: int = Query(20, le=100),
     offset: int = Query(0),
 ):
     """Возвращает список объявлений с фильтрами."""
     service = ListingService(session)
-    listings = await service.get_listings(
+    return await service.get_listings(
         price_min=price_min,
         price_max=price_max,
         area_min=area_min,
@@ -52,8 +60,8 @@ async def get_listings(
         district=district,
         room_count=room_count,
         water_included=water_included,
+        is_private_lessor=is_private_lessor,
         source=source,
         limit=limit,
         offset=offset,
     )
-    return {"total": len(listings), "listings": [ListingRead.model_validate(l) for l in listings]}

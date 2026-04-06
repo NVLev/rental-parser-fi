@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
-
+import logging
+import re
 import httpx
 
 from config import settings
@@ -107,7 +108,7 @@ class VuokraoviParser:
             "newBuildingSearchCriteria": "ALL_PROPERTIES",
         }
 
-
+        logger.info(f"payload: {payload}")
         response = await self.client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()
@@ -122,6 +123,7 @@ class VuokraoviParser:
         try:
             response = await self.client.get(url, params={"friendlyId": friendly_id})
             response.raise_for_status()
+            print(f"details: {response.json()}")
             return response.json()
         except httpx.HTTPStatusError as e:
             logger.warning("Failed to fetch details for %s: HTTP %s", friendly_id, e.response.status_code)
@@ -144,20 +146,46 @@ class VuokraoviParser:
             return "IMMEDIATELY"
         return availability.get("vacancyDate")  # "2026-05-01"
 
-    def _parse_water(self, details: Dict) -> tuple[Optional[bool], Optional[float]]:
+    def _parse_water(self, details: Dict) -> bool | None | Any:
         charges = details.get("property", {}).get("periodicCharges", [])
         for charge in charges:
             if charge.get("periodicCharge") == "WATER":
                 included = charge.get("includedInOverallCost", False)
-                price = charge.get("price") if not included else None
-                return included, price
+                return included
 
         # Fallback на текстовое поле
         info = (details.get("property", {}).get("periodicChargesAdditionalInfo") or "").lower()
-        if "water is available for rent" in info or "vesi sisältyy vuokraan" in info:
-            return True, None
+        if "vesi sisältyy vuokraan" in info or "vesi kuuluu vuokraan" in info \
+                or "vesimaksu sisältyy vuokraan" in info or "water is available for rent" in info:
+            return True
+        # if "vesimaksu" in info:
+        #     return False
+        charges_add = (details.get("text") or "").lower()
+        if "vesi sisältyy vuokraan" in info or "vesi kuuluu vuokraan" in info \
+                or "vesimaksu sisältyy vuokraan" in info or "water is available for rent" in info:
+            return True
 
-        return None, None
+        return None
+
+    def _parse_price(self, details: Dict) -> Optional[float]:
+        # Сначала из periodicCharges
+        charges = details.get("property", {}).get("periodicCharges", [])
+        for charge in charges:
+            if charge.get("periodicCharge") == "WATER":
+                included = charge.get("includedInOverallCost", False)
+                return charge.get("price") if not included else None
+
+        # Fallback — ищем цену в тексте объявления
+        text = (details.get("text") or "").lower()
+        info = (details.get("property", {}).get("periodicChargesAdditionalInfo") or "").lower()
+
+        for source in [info, text]:
+            match = re.search(r"vesimaksu\s*(\d+[,.]?\d*)\s*€", source)
+            if match:
+                price_str = match.group(1).replace(",", ".")
+                return float(price_str)
+
+        return None
 
     def _parse_electricity(self, details: Dict) -> Optional[bool]:
         charges = details.get("property", {}).get("periodicCharges", [])
@@ -165,12 +193,12 @@ class VuokraoviParser:
             if charge.get("periodicCharge") == "ELECTRICITY":
                 return charge.get("includedInOverallCost", False)
 
-        # Fallback — парсим текстовое поле
+        # Fallback — парсим текстовое поле property
         additional_info = details.get("property", {}).get("periodicChargesAdditionalInfo", "") or ""
         additional_info_lower = additional_info.lower()
         if "sähkö sisältyy" in additional_info_lower or "electricity included" in additional_info_lower:
             return True
-        if "vuokralainen tekee" in additional_info_lower or "tenant makes" in additional_info_lower:
+        if "vuokralainen tekee" in additional_info_lower or "tenant makes" in additional_info_lower or "omalla sopimuksella" in additional_info_lower:
             return False
 
         return None
@@ -217,8 +245,12 @@ class VuokraoviParser:
             logger.warning("Could not parse datetime: %s", value)
             return None
 
-    def map_to_listing(self, item: Dict, details: Optional[Dict] = None) -> Listing:
+    def map_to_listing(self, item: Dict, details: Optional[Dict] = None) -> Optional[Listing]:
         friendly_id = item["friendlyId"]
+
+        if details and details.get("status") == "UNPUBLISHED":
+            logger.info("Skipping unpublished listing %s", friendly_id)
+            return None
 
         listing = Listing(
             external_id=friendly_id,
@@ -236,14 +268,19 @@ class VuokraoviParser:
 
         if details:
             listing.water_included = self._parse_water(details)
+            listing.water_price = self._parse_price(details)
             listing.electricity_included = self._parse_electricity(details)
             listing.floor_plan_url = self._parse_floor_plan_url(details)
+            listing.district = self._parse_district(details, fallback=item.get("addressLine2"))
+            listing.lessor_name, listing.is_private_lessor = self._parse_lessor(details)
 
         return listing
 
     async def parse(self) -> List[Listing]:
-        results: List[Listing] = []
+        if not self.client:
+            raise RuntimeError("VuokraoviParser must be used as async context manager")
 
+        results: List[Listing] = []
         offset = 0
         limit = settings.parser.max_listings_per_run
 
@@ -258,7 +295,6 @@ class VuokraoviParser:
                 break
 
             raw_items = data.get("announcements", [])
-
             if not raw_items:
                 logger.info("No more listings at offset %d", offset)
                 break
@@ -275,6 +311,9 @@ class VuokraoviParser:
                 await asyncio.sleep(self.delay)
 
                 listing = self.map_to_listing(item, details)
+                if listing is None:
+                    continue
+
                 results.append(listing)
 
                 if len(results) >= limit:
@@ -282,6 +321,5 @@ class VuokraoviParser:
 
             offset += len(raw_items)
 
-            await asyncio.sleep(self.delay)
         logger.info("VuokraoviParser finished: %d listings collected", len(results))
         return results
