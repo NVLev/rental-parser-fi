@@ -11,6 +11,40 @@ from app.database.models import Listing
 
 logger = logging.getLogger(__name__)
 
+
+WATER_INCLUDED_RE = re.compile(
+    r"vesi\s*(sisältyy|kuuluu)\s*vuokraan"
+    r"|water\s*is\s*available\s*for\s*rent"
+    r"|vesimaksu\s*sisältyy\s*vuokraan|"
+    r"vesi-?\s*ja\s*lämmityskulut|"
+    r"vesimaksu[\s:–\-]*(?:\w+[\s:–\-]*){0,2}\d"
+    r"|kulutukseen\s*perustuva\s*vesimaksu",
+
+    re.IGNORECASE,
+)
+WATER_NOT_INCLUDED_RE = re.compile(
+    r"vesimaksu[\s:–\-]*\d"
+    r"|vesiennakkomaksu"
+    r"|vesi[\s:]*kulutuksen\s*mukaan",
+    re.IGNORECASE,
+)
+ELEC_INCLUDED_RE = re.compile(
+    r"sähkö\s*(sisältyy|kuuluu)\s*vuokraan"
+    r"|sähkösopimus\w*[\s:]*sisältyy"  
+    r"|sähkö-?\s*.*?lämmityskulut"
+    r"|electricity\s*included",
+    re.IGNORECASE,
+)
+ELEC_NOT_INCLUDED_RE = re.compile(
+    r"vuokralainen\s*tekee\s*(oman\s*)?sähkösopimuksen"
+    r"|sähkösopimus[\s:]*vuokralainen\s*tekee"
+    r"|omalla\s*(sähkö)?sopimuksella"
+    r"|sähkö\s*kulutuksen\s*mukaan"
+    r"|kulutuksen\s*mukaan\s*sähkö"
+    r"|tenant\s*makes.*electricity",
+    re.IGNORECASE,
+)
+
 class VuokraoviParser:
     """
         Парсер объявлений аренды с сайта Vuokraovi.
@@ -123,7 +157,7 @@ class VuokraoviParser:
         try:
             response = await self.client.get(url, params={"friendlyId": friendly_id})
             response.raise_for_status()
-            print(f"details: {response.json()}")
+            logger.debug("Fetched details for %s", friendly_id)
             return response.json()
         except httpx.HTTPStatusError as e:
             logger.warning("Failed to fetch details for %s: HTTP %s", friendly_id, e.response.status_code)
@@ -146,24 +180,42 @@ class VuokraoviParser:
             return "IMMEDIATELY"
         return availability.get("vacancyDate")  # "2026-05-01"
 
-    def _parse_water(self, details: Dict) -> bool | None | Any:
+    def _parse_water(self, details: Dict) -> Optional[bool]:
         charges = details.get("property", {}).get("periodicCharges", [])
         for charge in charges:
             if charge.get("periodicCharge") == "WATER":
-                included = charge.get("includedInOverallCost", False)
-                return included
+                return charge.get("includedInOverallCost", False)
 
-        # Fallback на текстовое поле
-        info = (details.get("property", {}).get("periodicChargesAdditionalInfo") or "").lower()
-        if "vesi sisältyy vuokraan" in info or "vesi kuuluu vuokraan" in info \
-                or "vesimaksu sisältyy vuokraan" in info or "water is available for rent" in info:
+        # Fallback по тексту
+        text_sources = " ".join(filter(None, [
+            details.get("property", {}).get("periodicChargesAdditionalInfo"),
+            details.get("property", {}).get("description"),
+            details.get("text"),
+        ]))
+
+        if WATER_INCLUDED_RE.search(text_sources):
             return True
-        # if "vesimaksu" in info:
-        #     return False
-        charges_add = (details.get("text") or "").lower()
-        if "vesi sisältyy vuokraan" in info or "vesi kuuluu vuokraan" in info \
-                or "vesimaksu sisältyy vuokraan" in info or "water is available for rent" in info:
+        if WATER_NOT_INCLUDED_RE.search(text_sources):
+            return False
+
+        return None
+
+    def _parse_electricity(self, details: Dict) -> Optional[bool]:
+        charges = details.get("property", {}).get("periodicCharges", [])
+        for charge in charges:
+            if charge.get("periodicCharge") == "ELECTRICITY":
+                return charge.get("includedInOverallCost", False)
+
+        text_sources = " ".join(filter(None, [
+            details.get("property", {}).get("periodicChargesAdditionalInfo"),
+            details.get("property", {}).get("description"),
+            details.get("text"),
+        ]))
+
+        if ELEC_INCLUDED_RE.search(text_sources):
             return True
+        if ELEC_NOT_INCLUDED_RE.search(text_sources):
+            return False
 
         return None
 
@@ -187,21 +239,6 @@ class VuokraoviParser:
 
         return None
 
-    def _parse_electricity(self, details: Dict) -> Optional[bool]:
-        charges = details.get("property", {}).get("periodicCharges", [])
-        for charge in charges:
-            if charge.get("periodicCharge") == "ELECTRICITY":
-                return charge.get("includedInOverallCost", False)
-
-        # Fallback — парсим текстовое поле property
-        additional_info = details.get("property", {}).get("periodicChargesAdditionalInfo", "") or ""
-        additional_info_lower = additional_info.lower()
-        if "sähkö sisältyy" in additional_info_lower or "electricity included" in additional_info_lower:
-            return True
-        if "vuokralainen tekee" in additional_info_lower or "tenant makes" in additional_info_lower or "omalla sopimuksella" in additional_info_lower:
-            return False
-
-        return None
 
     def _parse_floor_plan_url(self, details: Dict) -> Optional[str]:
         image_ids = details.get("imageIds", {})
@@ -269,6 +306,8 @@ class VuokraoviParser:
         if details:
             listing.water_included = self._parse_water(details)
             listing.water_price = self._parse_price(details)
+            if listing.water_price and listing.water_included is None:
+                listing.water_included = False
             listing.electricity_included = self._parse_electricity(details)
             listing.floor_plan_url = self._parse_floor_plan_url(details)
             listing.district = self._parse_district(details, fallback=item.get("addressLine2"))
