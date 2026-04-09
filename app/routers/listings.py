@@ -32,13 +32,16 @@ async def parse_listings(
     service = ListingService(session)
     new_count = await service.upsert_listings(all_listings)
 
-    parsed_ids = [l.external_id for l in all_listings]
-    deactivated = await service.deactivate_missing(parsed_ids, source="vuokraovi")  # ⚠️ потом улучшим
+    vuokraovi_ids = [l.external_id for l in all_listings if l.source == "vuokraovi"]
+    sato_ids = [l.external_id for l in all_listings if l.source == "sato"]
+
+    deactivated_v = await service.deactivate_missing(vuokraovi_ids, source="vuokraovi")
+    deactivated_s = await service.deactivate_missing(sato_ids, source="sato")
 
     return {
         "parsed": len(all_listings),
         "new": new_count,
-        "deactivated": deactivated,
+        "deactivated": deactivated_v + deactivated_s,
     }
 
 @router.get("/", response_model=list[ListingRead])
