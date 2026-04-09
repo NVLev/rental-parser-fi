@@ -20,7 +20,7 @@ class ListingService:
             row
             for row in (
                 await self.session.execute(
-                    select(Listing.external_id).where(
+                    select(Listing.external_id, Listing.source).where(
                         Listing.external_id.in_([l.external_id for l in listings])
                     )
                 )

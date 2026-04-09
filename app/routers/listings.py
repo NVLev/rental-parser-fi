@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.parsers.sato import SatoParser
 from app.parsers.vuokraovi import VuokraoviParser
 from app.services.listing_service import ListingService
 from app.database.schemas.listing import ListingRead
@@ -19,18 +20,23 @@ async def parse_listings(
     """
     Запускает парсинг Vuokraovi и сохраняет данные в БД.
     """
+    all_listings = []
+
     async with VuokraoviParser() as parser:
         logger.info("Started VuokraoviParser")
-        listings = await parser.parse()
+        all_listings.extend(await parser.parse())
+
+    async with SatoParser() as parser:
+        all_listings.extend(await parser.parse())
 
     service = ListingService(session)
-    new_count = await service.upsert_listings(listings)
+    new_count = await service.upsert_listings(all_listings)
 
-    parsed_ids = [l.external_id for l in listings]
-    deactivated = await service.deactivate_missing(parsed_ids, source="vuokraovi")
+    parsed_ids = [l.external_id for l in all_listings]
+    deactivated = await service.deactivate_missing(parsed_ids, source="vuokraovi")  # ⚠️ потом улучшим
 
     return {
-        "parsed": len(listings),
+        "parsed": len(all_listings),
         "new": new_count,
         "deactivated": deactivated,
     }

@@ -23,10 +23,13 @@ class Listing(Base):
 
     __tablename__ = "listings"
 
+    __table_args__ = (
+        UniqueConstraint("source", "external_id", name="uq_source_external_id"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
 
     # Идентификация
-    external_id: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    external_id: Mapped[str] = mapped_column(String(50), unique=True)
     source: Mapped[str] = mapped_column(String(20))  # "vuokraovi" | "sato"
     url: Mapped[str] = mapped_column(String(500))
 
