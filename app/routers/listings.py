@@ -27,21 +27,23 @@ async def parse_listings(
         all_listings.extend(await parser.parse())
 
     async with SatoParser() as parser:
-        all_listings.extend(await parser.parse())
+        sato = await parser.parse()
+        logger.info("SATO parsed: %d", len(sato))
+        all_listings.extend(sato)
 
     service = ListingService(session)
     new_count = await service.upsert_listings(all_listings)
 
     vuokraovi_ids = [l.external_id for l in all_listings if l.source == "vuokraovi"]
-    sato_ids = [l.external_id for l in all_listings if l.source == "sato"]
+    # sato_ids = [l.external_id for l in all_listings if l.source == "sato"]
 
     deactivated_v = await service.deactivate_missing(vuokraovi_ids, source="vuokraovi")
-    deactivated_s = await service.deactivate_missing(sato_ids, source="sato")
+    # deactivated_s = await service.deactivate_missing(sato_ids, source="sato")
 
     return {
         "parsed": len(all_listings),
         "new": new_count,
-        "deactivated": deactivated_v + deactivated_s,
+        "deactivated": deactivated_v
     }
 
 @router.get("/", response_model=list[ListingRead])

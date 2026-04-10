@@ -1,6 +1,6 @@
 from typing import List, Optional
 import logging
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Listing
@@ -12,28 +12,25 @@ class ListingService:
         self.session = session
 
     async def upsert_listings(self, listings: List[Listing]) -> int:
-        """Сохраняет объявления в БД, обновляет существующие. Возвращает кол-во новых."""
         if not listings:
             return 0
 
-        existing_ids = {
-            row
-            for row in (
-                await self.session.execute(
-                    select(Listing.external_id, Listing.source).where(
-                        Listing.external_id.in_([l.external_id for l in listings])
-                    )
-                )
-            ).scalars()
+        # Bulk fetch существующих
+        keys = [(l.source, l.external_id) for l in listings]
+        stmt = select(Listing).where(
+            tuple_(Listing.source, Listing.external_id).in_(keys)
+        )
+        result = await self.session.execute(stmt)
+        existing_map: dict[tuple, Listing] = {
+            (row.source, row.external_id): row
+            for row in result.scalars().all()
         }
 
         new_count = 0
         for listing in listings:
-            if listing.external_id in existing_ids:
-                stmt = select(Listing).where(Listing.external_id == listing.external_id)
-                result = await self.session.execute(stmt)
-                existing = result.scalar_one()
-
+            key = (listing.source, listing.external_id)
+            if key in existing_map:
+                existing = existing_map[key]
                 existing.price = listing.price
                 existing.area = listing.area
                 existing.available_from = listing.available_from
@@ -48,6 +45,7 @@ class ListingService:
             else:
                 self.session.add(listing)
                 new_count += 1
+
         await self.session.commit()
         return new_count
 

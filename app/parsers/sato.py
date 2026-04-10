@@ -15,7 +15,8 @@ ROOM_COUNT_MAP = {
     "TYPE_2H": "TWO_ROOMS",
     "TYPE_3H": "THREE_ROOMS",
     "TYPE_4H": "FOUR_ROOMS",
-    "TYPE_5H": "FOUR_ROOMS",  # у нас нет FIVE_ROOMS в enum
+    "TYPE_5H": "FOUR_ROOMS",
+    "TYPE_5H_PLUS": "FOUR_ROOMS",
 }
 
 IMAGE_BASE_URL = "https://d1fzpuekdrhqpx.cloudfront.net/{id}?w=1280&h=854&fit=crop&q=80"
@@ -23,7 +24,6 @@ IMAGE_BASE_URL = "https://d1fzpuekdrhqpx.cloudfront.net/{id}?w=1280&h=854&fit=cr
 
 class SatoParser:
     SEARCH_URL = "https://oma.sato.fi/api/realestates/v2/product/searchV2?lang=en"
-    DETAIL_URL = "https://oma.sato.fi/api/realestates/v2/real-estate/{real_estate_id}/apartments?status=FREE,GOING_TO_BE_FREE&lang=en"
 
     def __init__(self):
         self.delay = settings.parser.request_delay_seconds
@@ -44,7 +44,7 @@ class SatoParser:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
 
-    async def fetch_search_page(self, offset: int = 0) -> Dict:
+    async def fetch_page(self, offset: int = 0) -> Dict:
         payload = {
             "sort": {"id": "RELEASE", "field": "VACANCY", "descending": False},
             "rules": [
@@ -65,44 +65,11 @@ class SatoParser:
         response.raise_for_status()
         return response.json()
 
-    async def fetch_real_estate_apartments(self, real_estate_id: str) -> List[Dict]:
-        url = self.DETAIL_URL.format(real_estate_id=real_estate_id)
-        response = await self.client.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("content", [])
-
     @staticmethod
     def _get_floor_plan_url(media_assets: List[Dict]) -> Optional[str]:
         for asset in media_assets:
             if asset.get("type") == "FLOORPLAN":
                 return IMAGE_BASE_URL.format(id=asset["id"])
-        return None
-
-    @staticmethod
-    def _get_district(apt: Dict) -> Optional[str]:
-        """Район из маркетинговых данных или адреса."""
-        # Пробуем marketing — там бывает название района в HEADER
-        for block in apt.get("marketing", []):
-            for item in block.get("items", []):
-                if item.get("type") == "HEADER":
-                    text = item.get("text", "")
-                    if text:
-                        return text  # напр. "Spacious homes..." — не идеально, но лучше null
-        # addresses[0].district тоже часто null у SATO
-        addresses = apt.get("addresses", [])
-        if addresses:
-            return addresses[0].get("district")
-        return None
-
-    @staticmethod
-    def _get_available_from(apt: Dict) -> Optional[str]:
-        available = apt.get("state", {}).get("available")
-        if available:
-            return available  # "2026-05-01" или null
-        status = apt.get("state", {}).get("status")
-        if status == "FREE":
-            return "IMMEDIATELY"
         return None
 
     @staticmethod
@@ -114,49 +81,73 @@ class SatoParser:
         street = addr.get("streetAddress", "")
         staircase = addr.get("staircase", "")
         apt_num = addr.get("apartmentNumber", "")
-        floor_info = addr.get("floor", {}) or {}
+        floor_info = addr.get("floor") or {}
         floor = floor_info.get("number", "")
+        total = floor_info.get("total", "")
 
-        parts = [street]
-        if staircase:
-            parts.append(staircase)
-        result = " ".join(filter(None, parts))
+        result = " ".join(filter(None, [street, staircase]))
         if apt_num:
             result += f" apt.{apt_num}"
         if floor:
-            result += f" (floor {floor}/{floor_info.get('total', '')})"
+            result += f" (floor {floor}/{total})"
         return result or apt.get("name")
 
-    def map_to_listing(self, apt: Dict, product_id: str) -> Listing:
-        water_charge = apt.get("waterCharge", {}) or {}
-        water_type = water_charge.get("type")  # INCLUDED_IN_RENT | PER_PERSON | null
-        water_included = water_type == "INCLUDED_IN_RENT"
+    def map_to_listing(self, item: Dict) -> Listing:
+        apt = item["apartment"]
+        real_estate = item["realEstate"]
+
+        # district из realEstate
+        district = None
+        re_addresses = real_estate.get("addresses", [])
+        if re_addresses and re_addresses[0].get("district"):
+            district = re_addresses[0]["district"]["name"]
+
+        # available_from
+        available = apt.get("state", {}).get("available")
+        if available:
+            available_from = available  # "2026-05-01"
+        elif apt.get("state", {}).get("status") == "FREE":
+            available_from = "IMMEDIATELY"
+        else:
+            available_from = None
+
+        # water
+        water_charge = apt.get("waterCharge") or {}
+        water_included = water_charge.get("type") == "INCLUDED_IN_RENT"
         water_price = None
         if not water_included and water_charge.get("amount"):
             water_price = water_charge["amount"].get("value")
 
-        rooms = apt.get("rooms", {}) or {}
-        room_type = rooms.get("type")  # TYPE_1H, TYPE_2H, ...
-        room_count = ROOM_COUNT_MAP.get(room_type)
+        # room_count
+        room_count = ROOM_COUNT_MAP.get(apt.get("rooms", {}).get("type"))
 
-        available_from = self._get_available_from(apt)
-        floor_plan_url = self._get_floor_plan_url(apt.get("mediaAssets", []))
-        address = self._build_address(apt)
+        # url
+        municipality = ""
+        street_for_url = ""
+        if re_addresses:
+            municipality = re_addresses[0].get("municipality", {}).get("name", "helsinki").lower()
+            street_for_url = re_addresses[0].get("streetAddress", "").lower().replace(" ", "%20")
+        district_for_url = district.lower().replace(" ", "-") if district else ""
+        url = (
+            f"https://www.sato.fi/en/rental-apartments"
+            f"/{municipality}/{district_for_url}/{street_for_url}"
+            f"/{real_estate['id']}/apartment/{item['id']}"
+        )
 
         return Listing(
             external_id=apt["apartmentId"],
             source="sato",
-            url=f"https://www.sato.fi/en/apartment/{product_id}",
+            url=url,
             price=apt["rent"]["normal"]["value"],
             area=apt.get("livingArea", {}).get("value"),
-            address=address,
-            district=apt.get("addresses", [{}])[0].get("district") if apt.get("addresses") else None,
+            address=self._build_address(apt),
+            district=district,
             room_count=room_count,
-            room_structure=rooms.get("formatted"),
+            room_structure=apt.get("rooms", {}).get("formatted"),
             water_included=water_included,
             water_price=water_price,
             electricity_included=apt.get("flags", {}).get("electricityIncludedInRent"),
-            floor_plan_url=floor_plan_url,
+            floor_plan_url=self._get_floor_plan_url(apt.get("mediaAssets", [])),
             available_from=available_from,
             is_private_lessor=False,
             lessor_name="SATO",
@@ -171,28 +162,16 @@ class SatoParser:
         offset = 0
 
         while len(results) < limit:
-            search_data = await self.fetch_search_page(offset)
-            products = search_data.get("products", {})
+            data = await self.fetch_page(offset)
+            products = data.get("products", {})
             items = products.get("content", [])
 
             if not items:
                 break
 
             for item in items:
-                real_estate_id = item["id"]
-                product_id = item["apartment"]["productId"]
-
-                try:
-                    apartments = await self.fetch_real_estate_apartments(real_estate_id)
-                    await asyncio.sleep(self.delay)
-                except Exception as e:
-                    logger.warning("Failed to fetch apartments for %s: %s", real_estate_id, e)
-                    continue
-
-                for apt in apartments:
-                    listing = self.map_to_listing(apt, product_id)
-                    results.append(listing)
-
+                listing = self.map_to_listing(item)
+                results.append(listing)
                 if len(results) >= limit:
                     break
 
@@ -200,6 +179,8 @@ class SatoParser:
             offset += len(items)
             if offset >= total:
                 break
+
+            await asyncio.sleep(self.delay)
 
         logger.info("SatoParser: collected %d listings", len(results))
         return results
