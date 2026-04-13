@@ -2,6 +2,8 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import StreamingResponse
+import io
 
 from app.parsers.sato import SatoParser
 from app.parsers.vuokraovi import VuokraoviParser
@@ -75,4 +77,45 @@ async def get_listings(
         source=source,
         limit=limit,
         offset=offset,
+    )
+
+@router.get("/export")
+async def export_listings(
+    session: AsyncSession = Depends(db_helper.session_getter),
+    price_min: Optional[float] = Query(None),
+    price_max: Optional[float] = Query(None),
+    area_min: Optional[float] = Query(None),
+    area_max: Optional[float] = Query(None),
+    district: Optional[str] = Query(None),
+    room_count: Optional[str] = Query(None),
+    water_included: Optional[bool] = Query(None),
+    is_private_lessor: Optional[bool] = Query(None),
+    source: Optional[str] = Query(None),
+):
+    """Экспорт листингов в Excel с теми же фильтрами что и GET /listings/"""
+    service = ListingService(session)
+    listings = await service.get_listings(
+        price_min=price_min,
+        price_max=price_max,
+        area_min=area_min,
+        area_max=area_max,
+        district=district,
+        room_count=room_count,
+        water_included=water_included,
+        is_private_lessor=is_private_lessor,
+        source=source,
+        limit=10000,  # на экспорт снимаем лимит
+        offset=0,
+    )
+
+    output = await build_excel(listings)
+
+    filename = "listings.xlsx"
+    if source:
+        filename = f"listings_{source}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
