@@ -44,6 +44,7 @@ class ListingService:
                 existing.is_active = True
             else:
                 self.session.add(listing)
+                existing_map[key] = listing
                 new_count += 1
 
         await self.session.commit()

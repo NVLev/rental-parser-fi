@@ -321,42 +321,37 @@ class VuokraoviParser:
 
         results: List[Listing] = []
         offset = 0
-        limit = settings.parser.max_listings_per_run
+        # limit = settings.parser.max_listings_per_run
 
-        while len(results) < limit:
-            try:
-                data = await self.fetch_page(offset)
-            except httpx.HTTPStatusError as e:
-                logger.error("Failed to fetch page at offset %d: HTTP %s", offset, e.response.status_code)
-                break
-            except httpx.RequestError as e:
-                logger.error("Request error at offset %d: %s", offset, e)
-                break
+        # while len(results) < limit:
+        try:
+            data = await self.fetch_page(offset)
+        except httpx.HTTPStatusError as e:
+            logger.error("Failed to fetch page at offset %d: HTTP %s", offset, e.response.status_code)
 
-            raw_items = data.get("announcements", [])
-            if not raw_items:
-                logger.info("No more listings at offset %d", offset)
-                break
+        except httpx.RequestError as e:
+            logger.error("Request error at offset %d: %s", offset, e)
 
-            filtered = [item for item in raw_items if not self.is_sato_listing(item)]
-            logger.info("Page offset=%d: %d total, %d after SATO filter", offset, len(raw_items), len(filtered))
+        raw_items = data.get("announcements", [])
+        if not raw_items:
+            logger.info("No more listings at offset %d", offset)
 
-            for item in filtered:
-                friendly_id = item.get("friendlyId")
-                if not friendly_id:
-                    continue
+        filtered = [item for item in raw_items if not self.is_sato_listing(item)]
+        logger.info("Page offset=%d: %d total, %d after SATO filter", offset, len(raw_items), len(filtered))
 
-                details = await self.fetch_details(friendly_id)
-                await asyncio.sleep(self.delay)
+        for item in filtered:
+            friendly_id = item.get("friendlyId")
+            if not friendly_id:
+                continue
 
-                listing = self.map_to_listing(item, details)
-                if listing is None:
-                    continue
+            details = await self.fetch_details(friendly_id)
+            await asyncio.sleep(self.delay)
 
-                results.append(listing)
+            listing = self.map_to_listing(item, details)
+            if listing is None:
+                continue
 
-                if len(results) >= limit:
-                    break
+            results.append(listing)
 
             offset += len(raw_items)
 

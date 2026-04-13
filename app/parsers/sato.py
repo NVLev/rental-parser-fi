@@ -21,6 +21,7 @@ ROOM_COUNT_MAP = {
 
 IMAGE_BASE_URL = "https://d1fzpuekdrhqpx.cloudfront.net/{id}?w=1280&h=854&fit=crop&q=80"
 
+MUNICIPALITIES = ["Helsinki", "Espoo", "Vantaa"]
 
 class SatoParser:
     SEARCH_URL = "https://oma.sato.fi/api/realestates/v2/product/searchV2?lang=en"
@@ -44,7 +45,7 @@ class SatoParser:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
 
-    async def fetch_page(self, offset: int = 0) -> Dict:
+    async def fetch_page(self, offset: int = 0, municipality: str = "Helsinki") -> Dict:
         payload = {
             "sort": {"id": "RELEASE", "field": "VACANCY", "descending": False},
             "rules": [
@@ -52,7 +53,7 @@ class SatoParser:
                     "field": "REGION",
                     "operator": "EQUAL",
                     "value": {
-                        "municipality": "Helsinki",
+                        "municipality": municipality,
                         "district": None,
                         "zip": None,
                         "address": None,
@@ -158,29 +159,33 @@ class SatoParser:
             raise RuntimeError("Use as async context manager")
 
         results: List[Listing] = []
-        limit = settings.parser.max_listings_per_run
-        offset = 0
 
-        while len(results) < limit:
-            data = await self.fetch_page(offset)
-            products = data.get("products", {})
-            items = products.get("content", [])
+        for municipality in MUNICIPALITIES:
+            offset = 0
+            municipality_count = 0
+            logger.info("SatoParser: fetching %s", municipality)
 
-            if not items:
-                break
+            while True:
+                data = await self.fetch_page(offset, municipality)
+                products = data.get("products", {})
+                items = products.get("content", [])
+                total = products.get("totalElements", 0)
 
-            for item in items:
-                listing = self.map_to_listing(item)
-                results.append(listing)
-                if len(results) >= limit:
+                if not items:
                     break
 
-            total = products.get("totalElements", 0)
-            offset += len(items)
-            if offset >= total:
-                break
+                for item in items:
+                    listing = self.map_to_listing(item)
+                    results.append(listing)
+                    municipality_count += 1
 
-            await asyncio.sleep(self.delay)
+                logger.info("SatoParser: %s — %d/%d", municipality, municipality_count, total)
 
-        logger.info("SatoParser: collected %d listings", len(results))
+                offset += len(items)
+                if offset >= total:
+                    break
+
+                await asyncio.sleep(self.delay)
+        print("SatoParser: total collected %d listings", len(results))
+        logger.info("SatoParser: total collected %d listings", len(results))
         return results

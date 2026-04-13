@@ -33,7 +33,6 @@ class BotConfig(BaseModel):
 class ParserConfig(BaseModel):
     check_interval_minutes: int = 30
     request_delay_seconds: float = 1.5
-    max_listings_per_run: int = 100
     headless: bool = True               # Playwright
 
 
