@@ -1,5 +1,5 @@
 import os
-from typing import Annotated
+from typing import Annotated, List, Tuple
 
 from pydantic import BaseModel, Field, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,7 +38,12 @@ class ParserConfig(BaseModel):
 
 class VuokraoviConfig(BaseModel):
     base_url: str = "https://api.vuokraovi.com/distant/swordsman"
-    municipality_code: str = "FI_UUSIMAA_HELSINKI"
+    municipality_codes: List[Tuple[str, str]] = [
+        ("FI_UUSIMAA_HELSINKI", "Helsinki"),
+        ("FI_UUSIMAA_ESPOO", "Espoo"),
+        ("FI_UUSIMAA_VANTAA", "Vantaa"),
+        ("FI_UUSIMAA_KAUNIAINEN", "Kauniainen"),
+    ]
     sato_customer_group_id: int = 26    # фильтруем SATO из результатов
 
 

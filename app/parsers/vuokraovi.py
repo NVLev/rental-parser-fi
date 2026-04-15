@@ -17,7 +17,6 @@ WATER_INCLUDED_RE = re.compile(
     r"|water\s*is\s*available\s*for\s*rent"
     r"|vesimaksu\s*sisältyy\s*vuokraan|"
     r"vesi-?\s*ja\s*lämmityskulut|"
-    r"vesimaksu[\s:–\-]*(?:\w+[\s:–\-]*){0,2}\d"
     r"|kulutukseen\s*perustuva\s*vesimaksu",
 
     re.IGNORECASE,
@@ -25,6 +24,9 @@ WATER_INCLUDED_RE = re.compile(
 WATER_NOT_INCLUDED_RE = re.compile(
     r"vesimaksu[\s:–\-]*\d"
     r"|vesiennakkomaksu"
+    r"vesimaksuennakko\s*\d"
+    r"vesimaksu\s*\d"
+    r"\d+\s*e.*vesi"
     r"|vesi[\s:]*kulutuksen\s*mukaan",
     re.IGNORECASE,
 )
@@ -68,7 +70,7 @@ class VuokraoviParser:
         """
     def __init__(self):
         self.base_url = settings.vuokraovi.base_url
-        self.municipality_code = settings.vuokraovi.municipality_code
+        self.municipality_codes = settings.vuokraovi.municipality_codes
         self.delay = settings.parser.request_delay_seconds
         self.client: Optional[httpx.AsyncClient] = None
 
@@ -87,25 +89,26 @@ class VuokraoviParser:
             await self.client.aclose()
             logger.debug("httpx client closed")
 
-    async def fetch_page(self, offset: int = 0) -> Dict:
+    def _build_location_terms(self, code: str, name: str) -> List[Dict]:
+        return [
+            {
+                "type": "CITY",
+                "code": code,
+                "shortName": name,
+                "parentCountryCode": "FI",
+                "parentRegionCode": "FI_UUSIMAA",
+                "parentRegionName": "Uusimaa",
+                "fullName": name,
+                "classified": True,
+            }
+        ]
+
+    async def fetch_page(self, offset: int, code: str, name: str) -> Dict:
         url = f"{self.base_url}/v3/announcements/rental/search/listpage"
 
         payload = {
             "locationSearchCriteria": {
-                "classifiedLocationTerms": [
-                    {
-                        "type": "CITY",
-                        "code": self.municipality_code,
-                        "shortName": "Helsinki",
-                        "parentCountryCode": "FI",
-                        "parentRegionCode": "FI_UUSIMAA",
-                        "parentRegionName": "Uusimaa",
-                        "fullName": "Helsinki",
-                        "latitude": 60.170492,
-                        "longitude": 24.941055,
-                        "classified": True,
-                    }
-                ],
+                "classifiedLocationTerms": self._build_location_terms(code, name),
                 "unclassifiedLocationTerms": [],
             },
             "lessorType": "ALL",
@@ -193,10 +196,12 @@ class VuokraoviParser:
             details.get("text"),
         ]))
 
-        if WATER_INCLUDED_RE.search(text_sources):
-            return True
         if WATER_NOT_INCLUDED_RE.search(text_sources):
             return False
+
+        if WATER_INCLUDED_RE.search(text_sources):
+            return True
+
 
         return None
 
@@ -320,40 +325,73 @@ class VuokraoviParser:
             raise RuntimeError("VuokraoviParser must be used as async context manager")
 
         results: List[Listing] = []
-        offset = 0
-        # limit = settings.parser.max_listings_per_run
+        seen_ids: set[str] = set()
+        for code, name in self.municipality_codes:
+            logger.info("Start parsing municipality: %s", name)
 
-        # while len(results) < limit:
-        try:
-            data = await self.fetch_page(offset)
-        except httpx.HTTPStatusError as e:
-            logger.error("Failed to fetch page at offset %d: HTTP %s", offset, e.response.status_code)
+            offset = 0
 
-        except httpx.RequestError as e:
-            logger.error("Request error at offset %d: %s", offset, e)
+            while True:
+                try:
+                    data = await self.fetch_page(offset, code, name)
+                except httpx.HTTPStatusError as e:
+                    logger.error(
+                        "Failed to fetch %s offset=%d: HTTP %s",
+                        name,
+                        offset,
+                        e.response.status_code,
+                    )
+                    break
+                except httpx.RequestError as e:
+                    logger.error(
+                        "Request error %s offset=%d: %s",
+                        name,
+                        offset,
+                        e,
+                    )
+                    break
 
-        raw_items = data.get("announcements", [])
-        if not raw_items:
-            logger.info("No more listings at offset %d", offset)
+                raw_items = data.get("announcements", [])
+                total = data.get("countOfAllResults", 0)
 
-        filtered = [item for item in raw_items if not self.is_sato_listing(item)]
-        logger.info("Page offset=%d: %d total, %d after SATO filter", offset, len(raw_items), len(filtered))
+                if not raw_items:
+                    logger.info("No more listings for %s at offset %d", name, offset)
+                    break
 
-        for item in filtered:
-            friendly_id = item.get("friendlyId")
-            if not friendly_id:
-                continue
+                filtered = [item for item in raw_items if not self.is_sato_listing(item)]
 
-            details = await self.fetch_details(friendly_id)
-            await asyncio.sleep(self.delay)
+                logger.info(
+                    "%s offset=%d: %d total, %d after SATO filter",
+                    name,
+                    offset,
+                    len(raw_items),
+                    len(filtered),
+                )
 
-            listing = self.map_to_listing(item, details)
-            if listing is None:
-                continue
+                for item in filtered:
+                    friendly_id = item.get("friendlyId")
+                    if not friendly_id:
+                        continue
 
-            results.append(listing)
+                    if friendly_id in seen_ids:
+                        continue
+                    seen_ids.add(friendly_id)
 
-            offset += len(raw_items)
+                    details = await self.fetch_details(friendly_id)
+                    await asyncio.sleep(self.delay)
 
+                    listing = self.map_to_listing(item, details)
+                    if listing is None:
+                        continue
+
+                    results.append(listing)
+
+                offset += 25
+
+                if offset >= total:
+                    logger.info("Finished %s (offset %d >= total %d)", name, offset, total)
+                    break
+
+        print("VuokraoviParser finished: %d listings collected", len(results))
         logger.info("VuokraoviParser finished: %d listings collected", len(results))
         return results

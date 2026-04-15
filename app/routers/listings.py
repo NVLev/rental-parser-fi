@@ -7,6 +7,7 @@ import io
 
 from app.parsers.sato import SatoParser
 from app.parsers.vuokraovi import VuokraoviParser
+from app.services.excel_service import build_excel
 from app.services.listing_service import ListingService
 from app.database.schemas.listing import ListingRead
 from app.database.db_helper import db_helper
