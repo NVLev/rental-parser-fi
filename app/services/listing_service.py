@@ -14,17 +14,23 @@ class ListingService:
     async def upsert_listings(self, listings: List[Listing]) -> int:
         if not listings:
             return 0
+        BATCH_SIZE = 1000
 
-        # Bulk fetch существующих
+        existing_map: dict[tuple, Listing] = {}
+
         keys = [(l.source, l.external_id) for l in listings]
-        stmt = select(Listing).where(
-            tuple_(Listing.source, Listing.external_id).in_(keys)
-        )
-        result = await self.session.execute(stmt)
-        existing_map: dict[tuple, Listing] = {
-            (row.source, row.external_id): row
-            for row in result.scalars().all()
-        }
+
+        for i in range(0, len(keys), BATCH_SIZE):
+            batch = keys[i:i + BATCH_SIZE]
+
+            stmt = select(Listing).where(
+                tuple_(Listing.source, Listing.external_id).in_(batch)
+            )
+
+            result = await self.session.execute(stmt)
+
+            for row in result.scalars():
+                existing_map[(row.source, row.external_id)] = row
 
         new_count = 0
         for listing in listings:
@@ -55,19 +61,34 @@ class ListingService:
         Помечает is_active=False объявления которых больше нет в выборке парсера.
         Вызывать после upsert_listings.
         """
+        BATCH_SIZE = 1000
+        parsed_set = set(parsed_external_ids)
         stmt = select(Listing).where(
             Listing.source == source,
             Listing.is_active == True,
-            Listing.external_id.not_in(parsed_external_ids),
         )
-        result = await self.session.execute(stmt)
-        stale = result.scalars().all()
 
-        for listing in stale:
-            listing.is_active = False
+        result = await self.session.stream(stmt)
+
+        stale_count = 0
+        batch = []
+
+        async for listing in result.scalars():
+            if listing.external_id not in parsed_set:
+                listing.is_active = False
+                batch.append(listing)
+
+            if len(batch) >= BATCH_SIZE:
+                await self.session.flush()
+                stale_count += len(batch)
+                batch.clear()
+
+        if batch:
+            await self.session.flush()
+            stale_count += len(batch)
 
         await self.session.commit()
-        return len(stale)
+        return stale_count
 
     async def get_listings(
         self,
