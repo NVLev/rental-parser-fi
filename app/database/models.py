@@ -36,12 +36,12 @@ class Listing(Base):
     # Основные поля
     price: Mapped[float] = mapped_column(Float)
     area: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    district: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    district: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
 
     # Комнаты
     room_count: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)  # хранит enum-строку из API
-    room_structure: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # финская строка "2h + kk"
+    room_structure: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)  # финская строка "2h + kk"
 
     # Коммунальные УСЛУГИ
     water_included: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
@@ -49,13 +49,13 @@ class Listing(Base):
     electricity_included: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Планировка
-    floor_plan_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    floor_plan_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
     # Доступность
     available_from: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # IMMEDIATELY | дата
 
     # Инфо об арендодателе
-    lessor_name: Mapped[Optional[str]]  # имя/название арендодателя
+    lessor_name: Mapped[Optional[str]] = mapped_column(String(250), nullable=True)
     is_private_lessor: Mapped[Optional[bool]]
 
     # Мета
