@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
-from app.routers import listings
 from app.database.db_helper import db_helper
+from app.routers import listings
 
 
 @asynccontextmanager
@@ -18,11 +18,7 @@ async def lifespan(app: FastAPI):
         print("🔌 Соединение с БД закрыто.")
 
 
-
-app = FastAPI(
-    lifespan=lifespan,
-    title="Rental Parser FI"
-)
+app = FastAPI(lifespan=lifespan, title="Rental Parser FI")
 
 app.include_router(listings.router)
 

@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    TIMESTAMP,
     BigInteger,
     Boolean,
     DateTime,
@@ -9,7 +10,6 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
-    TIMESTAMP,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,8 +40,12 @@ class Listing(Base):
     address: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
 
     # Комнаты
-    room_count: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)  # хранит enum-строку из API
-    room_structure: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)  # финская строка "2h + kk"
+    room_count: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True
+    )  # хранит enum-строку из API
+    room_structure: Mapped[Optional[str]] = mapped_column(
+        String(150), nullable=True
+    )  # финская строка "2h + kk"
 
     # Коммунальные УСЛУГИ
     water_included: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
@@ -52,7 +56,9 @@ class Listing(Base):
     floor_plan_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
     # Доступность
-    available_from: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # IMMEDIATELY | дата
+    available_from: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True
+    )  # IMMEDIATELY | дата
 
     # Инфо об арендодателе
     lessor_name: Mapped[Optional[str]] = mapped_column(String(250), nullable=True)
@@ -81,7 +87,9 @@ class UserFilter(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
 
     # Источник
-    source: Mapped[str] = mapped_column(String(20), default="both")  # vuokraovi | sato | both
+    source: Mapped[str] = mapped_column(
+        String(20), default="both"
+    )  # vuokraovi | sato | both
 
     # Ценовой диапазон
     price_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -105,7 +113,9 @@ class UserFilter(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     def __repr__(self) -> str:
-        return f"<UserFilter user={self.user_id} price={self.price_min}-{self.price_max}>"
+        return (
+            f"<UserFilter user={self.user_id} price={self.price_min}-{self.price_max}>"
+        )
 
 
 class SeenListing(Base):

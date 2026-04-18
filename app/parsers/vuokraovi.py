@@ -1,13 +1,13 @@
 import asyncio
 import logging
-from typing import List, Dict, Optional, Any
-from datetime import datetime
-import logging
 import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import httpx
 
-from config import settings
 from app.database.models import Listing
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,6 @@ WATER_INCLUDED_RE = re.compile(
     r"|vesimaksu\s*sisältyy\s*vuokraan|"
     r"vesi-?\s*ja\s*lämmityskulut|"
     r"|kulutukseen\s*perustuva\s*vesimaksu",
-
     re.IGNORECASE,
 )
 WATER_NOT_INCLUDED_RE = re.compile(
@@ -32,7 +31,7 @@ WATER_NOT_INCLUDED_RE = re.compile(
 )
 ELEC_INCLUDED_RE = re.compile(
     r"sähkö\s*(sisältyy|kuuluu)\s*vuokraan"
-    r"|sähkösopimus\w*[\s:]*sisältyy"  
+    r"|sähkösopimus\w*[\s:]*sisältyy"
     r"|sähkö-?\s*.*?lämmityskulut"
     r"|electricity\s*included",
     re.IGNORECASE,
@@ -47,27 +46,29 @@ ELEC_NOT_INCLUDED_RE = re.compile(
     re.IGNORECASE,
 )
 
+
 class VuokraoviParser:
     """
-        Парсер объявлений аренды с сайта Vuokraovi.
+    Парсер объявлений аренды с сайта Vuokraovi.
 
-        Использует публичный REST API Vuokraovi для получения списка объявлений
-        и (при необходимости) деталей.
+    Использует публичный REST API Vuokraovi для получения списка объявлений
+    и (при необходимости) деталей.
 
-        Основные задачи:
-        - загрузка страниц с объявлениями (пагинация)
-        - фильтрация нерелевантных объявлений (например, SATO)
-        - преобразование ответа API в модель Listing (ORM)
+    Основные задачи:
+    - загрузка страниц с объявлениями (пагинация)
+    - фильтрация нерелевантных объявлений (например, SATO)
+    - преобразование ответа API в модель Listing (ORM)
 
-        Особенности:
-        - асинхронная работа через httpx
-        - учитывает настройки из config (лимиты, задержки, регион)
-        - не содержит логики сохранения в БД (это уровень service)
+    Особенности:
+    - асинхронная работа через httpx
+    - учитывает настройки из config (лимиты, задержки, регион)
+    - не содержит логики сохранения в БД (это уровень service)
 
-        Использование:
-            parser = VuokraoviParser()
-            listings = await parser.parse()
-        """
+    Использование:
+        parser = VuokraoviParser()
+        listings = await parser.parse()
+    """
+
     def __init__(self):
         self.base_url = settings.vuokraovi.base_url
         self.municipality_codes = settings.vuokraovi.municipality_codes
@@ -81,7 +82,9 @@ class VuokraoviParser:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.close()
         if exc_type:
-            logger.error("VuokraoviParser exited with error: %s: %s", exc_type.__name__, exc_val)
+            logger.error(
+                "VuokraoviParser exited with error: %s: %s", exc_type.__name__, exc_val
+            )
         return False
 
     async def close(self) -> None:
@@ -149,10 +152,12 @@ class VuokraoviParser:
         response = await self.client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()
-        logger.info("fetch_page offset=%d: countOfAllResults=%s, announcements=%d",
-                    offset,
-                    data.get("countOfAllResults"),
-                    len(data.get("announcements", [])))
+        logger.info(
+            "fetch_page offset=%d: countOfAllResults=%s, announcements=%d",
+            offset,
+            data.get("countOfAllResults"),
+            len(data.get("announcements", [])),
+        )
         return data
 
     async def fetch_details(self, friendly_id: str) -> Dict:
@@ -163,7 +168,11 @@ class VuokraoviParser:
             logger.debug("Fetched details for %s", friendly_id)
             return response.json()
         except httpx.HTTPStatusError as e:
-            logger.warning("Failed to fetch details for %s: HTTP %s", friendly_id, e.response.status_code)
+            logger.warning(
+                "Failed to fetch details for %s: HTTP %s",
+                friendly_id,
+                e.response.status_code,
+            )
             return None
         except httpx.RequestError as e:
             logger.warning("Request error fetching details for %s: %s", friendly_id, e)
@@ -171,8 +180,8 @@ class VuokraoviParser:
 
     def is_sato_listing(self, item: Dict) -> bool:
         return (
-                item.get("office", {}).get("customerGroupId")
-                == settings.vuokraovi.sato_customer_group_id
+            item.get("office", {}).get("customerGroupId")
+            == settings.vuokraovi.sato_customer_group_id
         )
 
     def _parse_availability(self, item: Dict) -> Optional[str]:
@@ -190,18 +199,22 @@ class VuokraoviParser:
                 return charge.get("includedInOverallCost", False)
 
         # Fallback по тексту
-        text_sources = " ".join(filter(None, [
-            details.get("property", {}).get("periodicChargesAdditionalInfo"),
-            details.get("property", {}).get("description"),
-            details.get("text"),
-        ]))
+        text_sources = " ".join(
+            filter(
+                None,
+                [
+                    details.get("property", {}).get("periodicChargesAdditionalInfo"),
+                    details.get("property", {}).get("description"),
+                    details.get("text"),
+                ],
+            )
+        )
 
         if WATER_NOT_INCLUDED_RE.search(text_sources):
             return False
 
         if WATER_INCLUDED_RE.search(text_sources):
             return True
-
 
         return None
 
@@ -211,11 +224,16 @@ class VuokraoviParser:
             if charge.get("periodicCharge") == "ELECTRICITY":
                 return charge.get("includedInOverallCost", False)
 
-        text_sources = " ".join(filter(None, [
-            details.get("property", {}).get("periodicChargesAdditionalInfo"),
-            details.get("property", {}).get("description"),
-            details.get("text"),
-        ]))
+        text_sources = " ".join(
+            filter(
+                None,
+                [
+                    details.get("property", {}).get("periodicChargesAdditionalInfo"),
+                    details.get("property", {}).get("description"),
+                    details.get("text"),
+                ],
+            )
+        )
 
         if ELEC_INCLUDED_RE.search(text_sources):
             return True
@@ -234,7 +252,9 @@ class VuokraoviParser:
 
         # Fallback — ищем цену в тексте объявления
         text = (details.get("text") or "").lower()
-        info = (details.get("property", {}).get("periodicChargesAdditionalInfo") or "").lower()
+        info = (
+            details.get("property", {}).get("periodicChargesAdditionalInfo") or ""
+        ).lower()
 
         for source in [info, text]:
             match = re.search(r"vesimaksu\s*(\d+[,.]?\d*)\s*€", source)
@@ -243,7 +263,6 @@ class VuokraoviParser:
                 return float(price_str)
 
         return None
-
 
     def _parse_floor_plan_url(self, details: Dict) -> Optional[str]:
         image_ids = details.get("imageIds", {})
@@ -256,15 +275,17 @@ class VuokraoviParser:
         image_data = images.get(str(first_id), {})
         uri = image_data.get("image", {}).get("uri")
         if uri:
-            return f"https:{uri}".replace("{imageParameters}", "1280x854,fit,q80,f=webp")
+            return f"https:{uri}".replace(
+                "{imageParameters}", "1280x854,fit,q80,f=webp"
+            )
         return None
 
-    def _parse_district(self, details: Dict, fallback: Optional[str] = None) -> Optional[str]:
+    def _parse_district(
+        self, details: Dict, fallback: Optional[str] = None
+    ) -> Optional[str]:
         """Берёт subdistrict из деталей, fallback на addressLine2 из листинга."""
         subdistrict = (
-            details.get("property", {})
-            .get("subdistrict", {})
-            .get("defaultName")
+            details.get("property", {}).get("subdistrict", {}).get("defaultName")
         )
         return subdistrict or fallback
 
@@ -287,7 +308,9 @@ class VuokraoviParser:
             logger.warning("Could not parse datetime: %s", value)
             return None
 
-    def map_to_listing(self, item: Dict, details: Optional[Dict] = None) -> Optional[Listing]:
+    def map_to_listing(
+        self, item: Dict, details: Optional[Dict] = None
+    ) -> Optional[Listing]:
         friendly_id = item["friendlyId"]
 
         if details and details.get("status") == "UNPUBLISHED":
@@ -315,7 +338,9 @@ class VuokraoviParser:
                 listing.water_included = False
             listing.electricity_included = self._parse_electricity(details)
             listing.floor_plan_url = self._parse_floor_plan_url(details)
-            listing.district = self._parse_district(details, fallback=item.get("addressLine2"))
+            listing.district = self._parse_district(
+                details, fallback=item.get("addressLine2")
+            )
             listing.lessor_name, listing.is_private_lessor = self._parse_lessor(details)
 
         return listing
@@ -358,7 +383,9 @@ class VuokraoviParser:
                     logger.info("No more listings for %s at offset %d", name, offset)
                     break
 
-                filtered = [item for item in raw_items if not self.is_sato_listing(item)]
+                filtered = [
+                    item for item in raw_items if not self.is_sato_listing(item)
+                ]
 
                 logger.info(
                     "%s offset=%d: %d total, %d after SATO filter",
@@ -389,7 +416,9 @@ class VuokraoviParser:
                 offset += 25
 
                 if offset >= total:
-                    logger.info("Finished %s (offset %d >= total %d)", name, offset, total)
+                    logger.info(
+                        "Finished %s (offset %d >= total %d)", name, offset, total
+                    )
                     break
 
         print("VuokraoviParser finished: %d listings collected", len(results))

@@ -1,11 +1,11 @@
 import asyncio
 import logging
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 import httpx
 
-from config import settings
 from app.database.models import Listing
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ IMAGE_BASE_URL = "https://d1fzpuekdrhqpx.cloudfront.net/{id}?w=1280&h=854&fit=cr
 
 MUNICIPALITIES = ["Helsinki", "Espoo", "Vantaa"]
 
+
 class SatoParser:
     SEARCH_URL = "https://oma.sato.fi/api/realestates/v2/product/searchV2?lang=en"
 
@@ -35,7 +36,7 @@ class SatoParser:
             timeout=15.0,
             headers={
                 "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+                "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
                 "Origin": "https://www.sato.fi",
                 "x-requested-with": "XMLHttpRequest",
             },
@@ -126,8 +127,12 @@ class SatoParser:
         municipality = ""
         street_for_url = ""
         if re_addresses:
-            municipality = re_addresses[0].get("municipality", {}).get("name", "helsinki").lower()
-            street_for_url = re_addresses[0].get("streetAddress", "").lower().replace(" ", "%20")
+            municipality = (
+                re_addresses[0].get("municipality", {}).get("name", "helsinki").lower()
+            )
+            street_for_url = (
+                re_addresses[0].get("streetAddress", "").lower().replace(" ", "%20")
+            )
         district_for_url = district.lower().replace(" ", "-") if district else ""
         url = (
             f"https://www.sato.fi/en/rental-apartments"
@@ -179,7 +184,9 @@ class SatoParser:
                     results.append(listing)
                     municipality_count += 1
 
-                logger.info("SatoParser: %s — %d/%d", municipality, municipality_count, total)
+                logger.info(
+                    "SatoParser: %s — %d/%d", municipality, municipality_count, total
+                )
 
                 offset += len(items)
                 if offset >= total:

@@ -13,8 +13,12 @@ class UserFilterBase(BaseModel):
     area_min: Optional[float] = None
     area_max: Optional[float] = None
 
-    districts: Optional[str] = Field(None, description="Районы через запятую: Kallio,Kamppi")
-    room_counts: Optional[str] = Field(None, description="ONE_ROOM,TWO_ROOMS,THREE_ROOMS")
+    districts: Optional[str] = Field(
+        None, description="Районы через запятую: Kallio,Kamppi"
+    )
+    room_counts: Optional[str] = Field(
+        None, description="ONE_ROOM,TWO_ROOMS,THREE_ROOMS"
+    )
 
     water_included_only: bool = False
 

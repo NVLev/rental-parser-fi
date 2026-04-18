@@ -33,7 +33,7 @@ class BotConfig(BaseModel):
 class ParserConfig(BaseModel):
     check_interval_minutes: int = 30
     request_delay_seconds: float = 1.5
-    headless: bool = True               # Playwright
+    headless: bool = True  # Playwright
 
 
 class VuokraoviConfig(BaseModel):
@@ -44,7 +44,7 @@ class VuokraoviConfig(BaseModel):
         ("FI_UUSIMAA_VANTAA", "Vantaa"),
         ("FI_UUSIMAA_KAUNIAINEN", "Kauniainen"),
     ]
-    sato_customer_group_id: int = 26    # фильтруем SATO из результатов
+    sato_customer_group_id: int = 26  # фильтруем SATO из результатов
 
 
 class SatoConfig(BaseModel):

@@ -1,11 +1,13 @@
-from typing import List, Optional
 import logging
+from typing import List, Optional
+
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Listing
 
 logger = logging.getLogger(__name__)
+
 
 class ListingService:
     def __init__(self, session: AsyncSession):
@@ -21,7 +23,7 @@ class ListingService:
         keys = [(l.source, l.external_id) for l in listings]
 
         for i in range(0, len(keys), BATCH_SIZE):
-            batch = keys[i:i + BATCH_SIZE]
+            batch = keys[i : i + BATCH_SIZE]
 
             stmt = select(Listing).where(
                 tuple_(Listing.source, Listing.external_id).in_(batch)
@@ -56,7 +58,9 @@ class ListingService:
         await self.session.commit()
         return new_count
 
-    async def deactivate_missing(self, parsed_external_ids: List[str], source: str) -> int:
+    async def deactivate_missing(
+        self, parsed_external_ids: List[str], source: str
+    ) -> int:
         """
         Помечает is_active=False объявления которых больше нет в выборке парсера.
         Вызывать после upsert_listings.
