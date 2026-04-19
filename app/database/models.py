@@ -107,6 +107,11 @@ class UserFilter(Base):
 
     # Коммунальные
     water_included_only: Mapped[bool] = mapped_column(Boolean, default=False)
+    electricity_included_only: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Арендодатель
+    is_private_lessor: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
 
     # Состояние
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
