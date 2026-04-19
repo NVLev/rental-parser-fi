@@ -20,6 +20,7 @@ class DatabaseConfig(BaseModel):
 
 class BotConfig(BaseModel):
     token: str = Field(..., description="Telegram Bot Token")
+
     @field_validator("token")
     @classmethod
     def validate_token(cls, v: str) -> str:

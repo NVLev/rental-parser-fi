@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import UserFilter, Listing, SeenListing
+from app.database.models import Listing, SeenListing, UserFilter
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,7 @@ class UserFilterService:
         if user_filter.districts:
             district_list = [d.strip() for d in user_filter.districts.split(",")]
             from sqlalchemy import or_
+
             stmt = stmt.where(
                 or_(*[Listing.district.ilike(f"%{d}%") for d in district_list])
             )
@@ -135,7 +136,9 @@ class UserFilterService:
             await self.session.commit()
         except Exception:
             await self.session.rollback()
-            logger.warning("Some seen_listings already exist for user %s, skipping", user_id)
+            logger.warning(
+                "Some seen_listings already exist for user %s, skipping", user_id
+            )
 
     @staticmethod
     def format_filter_summary(f: UserFilter) -> str:

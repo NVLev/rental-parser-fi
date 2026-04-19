@@ -1,6 +1,6 @@
+import logging
 from contextlib import asynccontextmanager
 
-import logging
 import uvicorn
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -13,6 +13,7 @@ from app.services.scheduler import create_scheduler
 from config import settings
 
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

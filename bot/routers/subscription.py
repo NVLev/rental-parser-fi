@@ -1,16 +1,17 @@
 import logging
 
-from aiogram import Router, F
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from app.database.db_helper import db_helper
-from bot.keyboards import subscription_keyboard, main_menu
-from bot.user_filter_service import UserFilterService
+from bot.keyboards import main_menu, subscription_keyboard
 from bot.states import SearchStates
+from bot.user_filter_service import UserFilterService
 
 logger = logging.getLogger(__name__)
 router = Router()
+
 
 @router.message(F.text == "🔔 My subscription")
 async def show_subscription(message: Message) -> None:
@@ -30,11 +31,13 @@ async def show_subscription(message: Message) -> None:
             reply_markup=subscription_keyboard(has_sub=False),
         )
 
+
 @router.callback_query(F.data == "sub:create")
 async def create_subscription(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await callback.message.answer("Let's set up your filters first.")
     from bot.routers.search import search_start
+
     await search_start(callback.message, state)
 
 
@@ -56,11 +59,13 @@ async def save_subscription(callback: CallbackQuery, state: FSMContext) -> None:
     )
     await callback.answer()
 
+
 @router.callback_query(F.data == "sub:edit")
 async def edit_subscription(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await callback.message.edit_reply_markup()
     from bot.routers.search import search_start
+
     await search_start(callback.message, state)
 
 
@@ -90,4 +95,3 @@ async def pause_subscription(callback: CallbackQuery) -> None:
         reply_markup=main_menu(),
     )
     await callback.answer()
-

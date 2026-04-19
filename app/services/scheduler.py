@@ -1,15 +1,16 @@
 import logging
+
 from aiogram import Bot
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.database.db_helper import db_helper
 from app.database.models import UserFilter
-from app.parsers.vuokraovi import VuokraoviParser
 from app.parsers.sato import SatoParser
+from app.parsers.vuokraovi import VuokraoviParser
 from app.services.listing_service import ListingService
-from bot.user_filter_service import UserFilterService
 from bot.routers.listings import _format_listing
+from bot.user_filter_service import UserFilterService
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,9 @@ async def run_parse_and_notify(bot: Bot) -> None:
         logger.error("Scheduler: SatoParser failed: %s", e)
 
     if not all_listings:
-        logger.warning("Scheduler: no listings parsed, skipping upsert and notifications")
+        logger.warning(
+            "Scheduler: no listings parsed, skipping upsert and notifications"
+        )
         return
 
     async with db_helper.session_factory() as session:
@@ -46,7 +49,9 @@ async def run_parse_and_notify(bot: Bot) -> None:
         vuokraovi_ids = [l.external_id for l in all_listings if l.source == "vuokraovi"]
         sato_ids = [l.external_id for l in all_listings if l.source == "sato"]
         deactivated = 0
-        deactivated += await service.deactivate_missing(vuokraovi_ids, source="vuokraovi")
+        deactivated += await service.deactivate_missing(
+            vuokraovi_ids, source="vuokraovi"
+        )
         deactivated += await service.deactivate_missing(sato_ids, source="sato")
 
     logger.info(
@@ -63,6 +68,7 @@ async def run_parse_and_notify(bot: Bot) -> None:
 async def _send_notifications(bot: Bot) -> None:
     """Рассылает уведомления всем пользователям с активными подписками."""
     from sqlalchemy import select
+
     from app.database.models import UserFilter
 
     async with db_helper.session_factory() as session:
@@ -111,7 +117,12 @@ async def _notify_user(bot: Bot, user_filter: UserFilter) -> None:
                 disable_web_page_preview=True,
             )
         except Exception as e:
-            logger.warning("Failed to send listing %s to user %s: %s", listing.external_id, user_filter.user_id, e)
+            logger.warning(
+                "Failed to send listing %s to user %s: %s",
+                listing.external_id,
+                user_filter.user_id,
+                e,
+            )
 
 
 def create_scheduler(bot: Bot) -> AsyncIOScheduler:

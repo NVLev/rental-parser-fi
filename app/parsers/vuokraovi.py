@@ -346,9 +346,9 @@ class VuokraoviParser:
         return listing
 
     async def _fetch_item(
-            self,
-            item: Dict,
-            semaphore: asyncio.Semaphore,
+        self,
+        item: Dict,
+        semaphore: asyncio.Semaphore,
     ) -> Optional[Listing]:
         """Загружает детали одного объявления под семафором."""
         friendly_id = item.get("friendlyId")
@@ -377,7 +377,9 @@ class VuokraoviParser:
                 try:
                     data = await self.fetch_page(offset, code, name)
                 except httpx.HTTPStatusError as e:
-                    print(f"[Vuokraovi] HTTP error {e.response.status_code} at {name} offset={offset}")
+                    print(
+                        f"[Vuokraovi] HTTP error {e.response.status_code} at {name} offset={offset}"
+                    )
                     break
                 except httpx.RequestError as e:
                     print(f"[Vuokraovi] Request error at {name} offset={offset}: {e}")
@@ -385,21 +387,26 @@ class VuokraoviParser:
 
                 raw_items = data.get("announcements", [])
                 total = data.get("countOfAllResults", 0)
-                print(f"[Vuokraovi] {name} offset={offset}: got {len(raw_items)} items, total={total}")
+                print(
+                    f"[Vuokraovi] {name} offset={offset}: got {len(raw_items)} items, total={total}"
+                )
 
                 if not raw_items:
                     break
 
                 filtered = [
-                    item for item in raw_items
+                    item
+                    for item in raw_items
                     if not self.is_sato_listing(item)
-                       and item.get("friendlyId")
-                       and item.get("friendlyId") not in seen_ids
+                    and item.get("friendlyId")
+                    and item.get("friendlyId") not in seen_ids
                 ]
                 for item in filtered:
                     seen_ids.add(item["friendlyId"])
 
-                print(f"[Vuokraovi] {name} offset={offset}: {len(filtered)} after filter, fetching details...")
+                print(
+                    f"[Vuokraovi] {name} offset={offset}: {len(filtered)} after filter, fetching details..."
+                )
 
                 tasks = [self._fetch_item(item, semaphore) for item in filtered]
                 page_listings = await asyncio.gather(*tasks, return_exceptions=True)
@@ -410,10 +417,14 @@ class VuokraoviParser:
                     elif listing is not None:
                         results.append(listing)
 
-                print(f"[Vuokraovi] {name} offset={offset}: done, total so far={len(results)}")
+                print(
+                    f"[Vuokraovi] {name} offset={offset}: done, total so far={len(results)}"
+                )
                 offset += 25
                 if offset >= total:
-                    print(f"[Vuokraovi] {name} finished (offset {offset} >= total {total})")
+                    print(
+                        f"[Vuokraovi] {name} finished (offset {offset} >= total {total})"
+                    )
                     break
 
         print(f"[Vuokraovi] Finished: {len(results)} listings collected")

@@ -1,16 +1,23 @@
 from aiogram.types import (
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-    InlineKeyboardMarkup,
     InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+
 
 def main_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🔍 Search"), KeyboardButton(text="📋 Latest listings")],
-            [KeyboardButton(text="🔔 My subscription"), KeyboardButton(text="📊 Export Excel")],
+            [
+                KeyboardButton(text="🔍 Search"),
+                KeyboardButton(text="📋 Latest listings"),
+            ],
+            [
+                KeyboardButton(text="🔔 My subscription"),
+                KeyboardButton(text="📊 Export Excel"),
+            ],
         ],
         resize_keyboard=True,
         input_field_placeholder="Choose an option...",
@@ -49,12 +56,14 @@ def water_keyboard() -> InlineKeyboardMarkup:
     builder.adjust(2)
     return builder.as_markup()
 
+
 def electricity_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Included only", callback_data="electricity:true")
     builder.button(text="🔄 Any", callback_data="electricity:any")
     builder.adjust(2)
     return builder.as_markup()
+
 
 def lessor_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -73,16 +82,27 @@ def confirm_search_keyboard() -> InlineKeyboardMarkup:
     builder.adjust(1)
     return builder.as_markup()
 
-def listings_nav_keyboard(offset: int, total: int, page_size: int = 5) -> InlineKeyboardMarkup:
+
+def listings_nav_keyboard(
+    offset: int, total: int, page_size: int = 5
+) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     if offset > 0:
-        builder.button(text="⬅️ Prev", callback_data=f"listings:prev:{offset}:{page_size}")
+        builder.button(
+            text="⬅️ Prev", callback_data=f"listings:prev:{offset}:{page_size}"
+        )
     if offset + page_size < total:
-        builder.button(text="➡️ Next", callback_data=f"listings:next:{offset}:{page_size}")
-    builder.button(text="📊 Export this page", callback_data=f"listings:export:{offset}:{page_size}")
+        builder.button(
+            text="➡️ Next", callback_data=f"listings:next:{offset}:{page_size}"
+        )
+    builder.button(
+        text="📊 Export this page",
+        callback_data=f"listings:export:{offset}:{page_size}",
+    )
     builder.button(text="🏠 Main menu", callback_data="listings:menu")
     builder.adjust(2)
     return builder.as_markup()
+
 
 def subscription_keyboard(has_sub: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()

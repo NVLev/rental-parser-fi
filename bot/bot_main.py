@@ -6,8 +6,8 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from bot.routers import listings, search, start, subscription
 from config import settings
-from bot.routers import start, search, listings, subscription
 
 logger = logging.getLogger(__name__)
 

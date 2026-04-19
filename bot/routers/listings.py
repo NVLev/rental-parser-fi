@@ -1,9 +1,9 @@
 import io
 import logging
 
-from aiogram import Router, F
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery, BufferedInputFile
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from bot.keyboards import listings_nav_keyboard, main_menu
 from bot.states import SearchStates
@@ -13,10 +13,12 @@ router = Router()
 
 PAGE_SIZE = 5
 
+
 # latest listings
 @router.message(F.text == "📋 Latest listings")
 async def latest_listings(message: Message, state: FSMContext) -> None:
     await _show_listings(message, filters={}, offset=0)
+
 
 # run search
 @router.callback_query(SearchStates.confirm, F.data == "search:run")
@@ -27,8 +29,11 @@ async def run_search(callback: CallbackQuery, state: FSMContext) -> None:
     await _show_listings(callback.message, filters=data, offset=0)
     await callback.answer()
 
+
 # pagination
-@router.callback_query(F.data.startswith("listings:prev:") | F.data.startswith("listings:next:"))
+@router.callback_query(
+    F.data.startswith("listings:prev:") | F.data.startswith("listings:next:")
+)
 async def paginate_listings(callback: CallbackQuery, state: FSMContext) -> None:
     parts = callback.data.split(":")
     direction = parts[1]  # prev | next
@@ -40,8 +45,11 @@ async def paginate_listings(callback: CallbackQuery, state: FSMContext) -> None:
 
     data = await state.get_data()
     await callback.message.edit_reply_markup()
-    await _show_listings(callback.message, filters=data, offset=new_offset, page_size=page_size)
+    await _show_listings(
+        callback.message, filters=data, offset=new_offset, page_size=page_size
+    )
     await callback.answer()
+
 
 # export
 @router.message(F.text == "📊 Export Excel")
@@ -62,11 +70,12 @@ async def back_to_menu(callback: CallbackQuery) -> None:
     await callback.message.answer("Main menu", reply_markup=main_menu())
     await callback.answer()
 
+
 async def _show_listings(
-        message: Message,
-        filters: dict,
-        offset: int = 0,
-        page_size: int = PAGE_SIZE,
+    message: Message,
+    filters: dict,
+    offset: int = 0,
+    page_size: int = PAGE_SIZE,
 ) -> None:
     from app.database.db_helper import db_helper
     from app.services.listing_service import ListingService
@@ -110,8 +119,8 @@ async def _show_listings(
 
 async def _send_excel(message: Message, filters: dict) -> None:
     from app.database.db_helper import db_helper
-    from app.services.listing_service import ListingService
     from app.services.excel_service import build_excel
+    from app.services.listing_service import ListingService
 
     async with db_helper.session_factory() as session:
         service = ListingService(session)
@@ -141,9 +150,19 @@ async def _send_excel(message: Message, filters: dict) -> None:
 
 
 def _format_listing(listing) -> str:
-    water = "✅" if listing.water_included else ("❌" if listing.water_included is False else "❓")
-    elec = "✅" if listing.electricity_included else ("❌" if listing.electricity_included is False else "❓")
-    lessor = f"{'👤' if listing.is_private_lessor else '🏢'} {listing.lessor_name or '—'}"
+    water = (
+        "✅"
+        if listing.water_included
+        else ("❌" if listing.water_included is False else "❓")
+    )
+    elec = (
+        "✅"
+        if listing.electricity_included
+        else ("❌" if listing.electricity_included is False else "❓")
+    )
+    lessor = (
+        f"{'👤' if listing.is_private_lessor else '🏢'} {listing.lessor_name or '—'}"
+    )
 
     lines = [
         f"🏠 <b>{listing.room_structure or listing.room_count}</b> · {listing.area} m²",
