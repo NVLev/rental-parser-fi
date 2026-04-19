@@ -47,7 +47,15 @@ helsinki-rental-parser/
 │   │   ├── listing_service.py
 │   │   └── excel_service.py
 │   └── app_main.py
-├── bot/                    # planned
+├── bot/
+│    ├── bot_main.py          — точка входа, Dispatcher + роутеры
+│    ├── keyboards.py         — все клавиатуры (Reply + Inline)
+│    ├── states.py            — FSM состояния для визарда поиска
+│    └── routers/
+│        ├── start.py         — /start, главное меню
+│        ├── search.py        — пошаговый визард фильтров (FSM)
+│        ├── listings.py      — показ результатов, пагинация, экспорт
+│        └── subscription.py  — управление подпиской
 ├── migrations/
 ├── config.py
 ├── docker-compose.yml
