@@ -193,6 +193,6 @@ class SatoParser:
                     break
 
                 await asyncio.sleep(self.delay)
-        print("SatoParser: total collected %d listings", len(results))
+        print(f"SatoParser: total collected {len(results)} listings")
         logger.info("SatoParser: total collected %d listings", len(results))
         return results

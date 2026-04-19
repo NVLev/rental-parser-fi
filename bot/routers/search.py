@@ -1,13 +1,17 @@
 from aiogram import Router, F
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardRemove
+from sqlalchemy import select
 
+from app.database.db_helper import db_helper
+from app.database.models import Listing
 from bot.keyboards import (
     room_count_keyboard,
     source_keyboard,
     water_keyboard,
     lessor_keyboard,
-    confirm_search_keyboard, electricity_keyboard,
+    confirm_search_keyboard, electricity_keyboard, main_menu,
 )
 from bot.states import SearchStates
 
@@ -19,7 +23,10 @@ SKIP = "⏭ Skip"
 def _skip_keyboard():
     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=SKIP)]],
+        keyboard=[
+            [KeyboardButton(text=SKIP)],
+            [KeyboardButton(text="❌ Cancel")],
+        ],
         resize_keyboard=True,
     )
 
@@ -66,21 +73,22 @@ async def set_area_min(message: Message, state: FSMContext) -> None:
         except ValueError:
             await message.answer("Please enter a number, e.g. <b>30</b>")
             return
-        await state.set_state(SearchStates.area_max)
-        await message.answer("Maximum area (m²)? Or skip.", reply_markup=_skip_keyboard())
+    await state.set_state(SearchStates.area_max)
+    await message.answer("Maximum area (m²)? Or skip.", reply_markup=_skip_keyboard())
 
 @router.message(SearchStates.area_max)
 async def set_area_max(message: Message, state: FSMContext) -> None:
-    if message.text != SKIP:
+    if message.text != SKIP and message.text != "❌ Cancel":
         try:
             await state.update_data(area_max=float(message.text))
         except ValueError:
             await message.answer("Please enter a number, e.g. <b>80</b>")
             return
     await state.set_state(SearchStates.room_count)
-    await message.answer("Number of rooms?", reply_markup=room_count_keyboard())
+    await message.answer("Number of rooms?", reply_markup=ReplyKeyboardRemove())
+    await message.answer("👇", reply_markup=room_count_keyboard())
 
-@router.message(SearchStates.room_count, F.data.startswith("room:"))
+@router.callback_query(SearchStates.room_count, F.data.startswith("room:"))
 async def room_count(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.split(":")[1]
     if value != "ANY":
@@ -95,11 +103,43 @@ async def room_count(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(SearchStates.district)
 async def district(message: Message, state: FSMContext) -> None:
+    if message.text == "❌ Cancel":
+        await state.clear()
+        await message.answer("Cancelled.", reply_markup=main_menu())
+        return
     if message.text != SKIP:
-        await state.update_data(district=message.text.strip())
-    await state.set_state(SearchStates.water)
-    await message.answer("Water included in rent?", reply_markup=water_keyboard())
+        query = message.text.strip()
 
+        # Ищем совпадения в БД
+        async with db_helper.session_factory() as session:
+            result = await session.execute(
+                select(Listing.district)
+                .where(Listing.district.ilike(f"%{query}%"))
+                .where(Listing.is_active == True)
+                .distinct()
+                .limit(5)
+            )
+            matches = [row[0] for row in result.fetchall() if row[0]]
+
+        if not matches:
+            await message.answer(
+                f"⚠️ No districts found matching <b>{query}</b>.\n"
+                "District filter will not be applied.",
+            )
+        elif len(matches) == 1 and matches[0].lower() == query.lower():
+            # Точное совпадение — применяем молча
+            await state.update_data(district=matches[0])
+        else:
+            found = ", ".join(matches)
+            await message.answer(
+                f"📍 Found: <b>{found}</b>\n"
+                f"Applying filter: <b>{query}</b>"
+            )
+            await state.update_data(district=query)
+
+    await state.set_state(SearchStates.water)
+    await message.answer("Water included in rent?", reply_markup=ReplyKeyboardRemove())
+    await message.answer("👇", reply_markup=water_keyboard())
 
 @router.callback_query(SearchStates.water, F.data.startswith("water:"))
 async def set_water(callback: CallbackQuery, state: FSMContext) -> None:
@@ -121,6 +161,17 @@ async def set_electricity(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.answer("Lessor type?", reply_markup=lessor_keyboard())
     await callback.answer()
 
+@router.callback_query(SearchStates.lessor, F.data.startswith("lessor:"))
+async def set_lessor(callback: CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":")[1]
+    if value == "private":
+        await state.update_data(is_private_lessor=True)
+    elif value == "agency":
+        await state.update_data(is_private_lessor=False)
+    await callback.message.edit_reply_markup()
+    await state.set_state(SearchStates.source)
+    await callback.message.answer("Data source?", reply_markup=source_keyboard())
+    await callback.answer()
 
 @router.callback_query(SearchStates.source, F.data.startswith("source:"))
 async def set_source(callback: CallbackQuery, state: FSMContext) -> None:
@@ -137,12 +188,16 @@ async def set_source(callback: CallbackQuery, state: FSMContext) -> None:
     )
     await callback.answer()
 
-@router.message(SearchStates.confirm, F.data == "search:reset")
+@router.callback_query(SearchStates.confirm, F.data == "search:reset")
 async def reset_search(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.answer("Filters cleared. Start over with 🔍 Search.")
     await callback.answer()
 
+@router.message(StateFilter(SearchStates), F.text == "❌ Cancel")
+async def cancel_search(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Cancelled.", reply_markup=main_menu())
 
 def _format_filters(data: dict) -> str:
     lines = ["<b>Your filters:</b>"]

@@ -20,8 +20,6 @@ class DatabaseConfig(BaseModel):
 
 class BotConfig(BaseModel):
     token: str = Field(..., description="Telegram Bot Token")
-    admin_ids: list[int] = Field(default_factory=list, description="Admin user IDs")
-
     @field_validator("token")
     @classmethod
     def validate_token(cls, v: str) -> str:
@@ -34,6 +32,7 @@ class ParserConfig(BaseModel):
     check_interval_minutes: int = 30
     request_delay_seconds: float = 1.5
     headless: bool = True  # Playwright
+    concurrency: int = 10
 
 
 class VuokraoviConfig(BaseModel):
@@ -67,7 +66,7 @@ class Settings(BaseSettings):
 
     run: RunConfig = Field(default_factory=RunConfig)
     db: DatabaseConfig = Field(default_factory=DatabaseConfig)
-    # bot: Annotated[BotConfig, Field()]
+    bot: Annotated[BotConfig, Field()]
     parser: ParserConfig = Field(default_factory=ParserConfig)
     vuokraovi: VuokraoviConfig = Field(default_factory=VuokraoviConfig)
     sato: SatoConfig = Field(default_factory=SatoConfig)

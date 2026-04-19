@@ -111,7 +111,7 @@ async def _show_listings(
 async def _send_excel(message: Message, filters: dict) -> None:
     from app.database.db_helper import db_helper
     from app.services.listing_service import ListingService
-    from app.services.excel_service import ExcelService
+    from app.services.excel_service import build_excel
 
     async with db_helper.session_factory() as session:
         service = ListingService(session)
@@ -133,7 +133,7 @@ async def _send_excel(message: Message, filters: dict) -> None:
         await message.answer("No listings to export.")
         return
 
-    excel_bytes: io.BytesIO = ExcelService.build_excel(listings)
+    excel_bytes: io.BytesIO = await build_excel(listings)
     await message.answer_document(
         BufferedInputFile(excel_bytes.read(), filename="listings.xlsx"),
         caption=f"📊 {len(listings)} listings exported",
