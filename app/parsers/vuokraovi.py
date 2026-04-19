@@ -345,82 +345,87 @@ class VuokraoviParser:
 
         return listing
 
+    async def _fetch_item(
+        self,
+        item: Dict,
+        semaphore: asyncio.Semaphore,
+    ) -> Optional[Listing]:
+        """Загружает детали одного объявления под семафором."""
+        friendly_id = item.get("friendlyId")
+        if not friendly_id:
+            return None
+
+        async with semaphore:
+            details = await self.fetch_details(friendly_id)
+            await asyncio.sleep(self.delay)
+
+        return self.map_to_listing(item, details)
+
     async def parse(self) -> List[Listing]:
         if not self.client:
             raise RuntimeError("VuokraoviParser must be used as async context manager")
 
+        semaphore = asyncio.Semaphore(settings.parser.concurrency)
         results: List[Listing] = []
         seen_ids: set[str] = set()
-        for code, name in self.municipality_codes:
-            logger.info("Start parsing municipality: %s", name)
 
+        for code, name in self.municipality_codes:
+            print(f"[Vuokraovi] Start municipality: {name}")
             offset = 0
 
             while True:
                 try:
                     data = await self.fetch_page(offset, code, name)
                 except httpx.HTTPStatusError as e:
-                    logger.error(
-                        "Failed to fetch %s offset=%d: HTTP %s",
-                        name,
-                        offset,
-                        e.response.status_code,
+                    print(
+                        f"[Vuokraovi] HTTP error {e.response.status_code} at {name} offset={offset}"
                     )
                     break
                 except httpx.RequestError as e:
-                    logger.error(
-                        "Request error %s offset=%d: %s",
-                        name,
-                        offset,
-                        e,
-                    )
+                    print(f"[Vuokraovi] Request error at {name} offset={offset}: {e}")
                     break
 
                 raw_items = data.get("announcements", [])
                 total = data.get("countOfAllResults", 0)
+                print(
+                    f"[Vuokraovi] {name} offset={offset}: got {len(raw_items)} items, total={total}"
+                )
 
                 if not raw_items:
-                    logger.info("No more listings for %s at offset %d", name, offset)
                     break
 
                 filtered = [
-                    item for item in raw_items if not self.is_sato_listing(item)
+                    item
+                    for item in raw_items
+                    if not self.is_sato_listing(item)
+                    and item.get("friendlyId")
+                    and item.get("friendlyId") not in seen_ids
                 ]
+                for item in filtered:
+                    seen_ids.add(item["friendlyId"])
 
-                logger.info(
-                    "%s offset=%d: %d total, %d after SATO filter",
-                    name,
-                    offset,
-                    len(raw_items),
-                    len(filtered),
+                print(
+                    f"[Vuokraovi] {name} offset={offset}: {len(filtered)} after filter, fetching details..."
                 )
 
-                for item in filtered:
-                    friendly_id = item.get("friendlyId")
-                    if not friendly_id:
-                        continue
+                tasks = [self._fetch_item(item, semaphore) for item in filtered]
+                page_listings = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    if friendly_id in seen_ids:
-                        continue
-                    seen_ids.add(friendly_id)
+                for listing in page_listings:
+                    if isinstance(listing, Exception):
+                        print(f"[Vuokraovi] Exception in _fetch_item: {listing}")
+                    elif listing is not None:
+                        results.append(listing)
 
-                    details = await self.fetch_details(friendly_id)
-                    await asyncio.sleep(self.delay)
-
-                    listing = self.map_to_listing(item, details)
-                    if listing is None:
-                        continue
-
-                    results.append(listing)
-
+                print(
+                    f"[Vuokraovi] {name} offset={offset}: done, total so far={len(results)}"
+                )
                 offset += 25
-
                 if offset >= total:
-                    logger.info(
-                        "Finished %s (offset %d >= total %d)", name, offset, total
+                    print(
+                        f"[Vuokraovi] {name} finished (offset {offset} >= total {total})"
                     )
                     break
 
-        print("VuokraoviParser finished: %d listings collected", len(results))
-        logger.info("VuokraoviParser finished: %d listings collected", len(results))
+        print(f"[Vuokraovi] Finished: {len(results)} listings collected")
         return results
