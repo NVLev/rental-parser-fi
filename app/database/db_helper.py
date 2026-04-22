@@ -34,6 +34,7 @@ class DatabaseHelper:
             echo_pool=echo_pool,
             pool_size=pool_size,
             max_overflow=max_overflow,
+            pool_pre_ping=True,
         )
         self.session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self.engine,
