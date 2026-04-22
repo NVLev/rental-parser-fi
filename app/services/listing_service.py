@@ -1,7 +1,9 @@
 import logging
 from typing import List, Optional
 
+import sqlalchemy as sa
 from sqlalchemy import select, tuple_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Listing
@@ -16,44 +18,61 @@ class ListingService:
     async def upsert_listings(self, listings: List[Listing]) -> int:
         if not listings:
             return 0
+
         BATCH_SIZE = 1000
+        new_count = 0
 
-        existing_map: dict[tuple, Listing] = {}
+        for i in range(0, len(listings), BATCH_SIZE):
+            batch = listings[i : i + BATCH_SIZE]
 
-        keys = [(l.source, l.external_id) for l in listings]
+            values = [
+                {
+                    "external_id": l.external_id,
+                    "source": l.source,
+                    "url": l.url,
+                    "price": l.price,
+                    "area": l.area,
+                    "district": l.district,
+                    "address": l.address,
+                    "room_count": l.room_count,
+                    "room_structure": l.room_structure,
+                    "water_included": l.water_included,
+                    "water_price": l.water_price,
+                    "electricity_included": l.electricity_included,
+                    "floor_plan_url": l.floor_plan_url,
+                    "available_from": l.available_from,
+                    "lessor_name": l.lessor_name,
+                    "is_private_lessor": l.is_private_lessor,
+                    "published_at": l.published_at,
+                    "is_active": True,
+                }
+                for l in batch
+            ]
 
-        for i in range(0, len(keys), BATCH_SIZE):
-            batch = keys[i : i + BATCH_SIZE]
-
-            stmt = select(Listing).where(
-                tuple_(Listing.source, Listing.external_id).in_(batch)
+            stmt = pg_insert(Listing).values(values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["source", "external_id"],
+                set_={
+                    "price": stmt.excluded.price,
+                    "area": stmt.excluded.area,
+                    "address": stmt.excluded.address,
+                    "available_from": stmt.excluded.available_from,
+                    "district": stmt.excluded.district,
+                    "water_included": stmt.excluded.water_included,
+                    "water_price": stmt.excluded.water_price,
+                    "electricity_included": stmt.excluded.electricity_included,
+                    "floor_plan_url": stmt.excluded.floor_plan_url,
+                    "lessor_name": stmt.excluded.lessor_name,
+                    "is_private_lessor": stmt.excluded.is_private_lessor,
+                    "is_active": True,
+                },
+            ).returning(
+                Listing.id,
+                sa.text("(xmax = 0) AS is_new"),
             )
 
             result = await self.session.execute(stmt)
-
-            for row in result.scalars():
-                existing_map[(row.source, row.external_id)] = row
-
-        new_count = 0
-        for listing in listings:
-            key = (listing.source, listing.external_id)
-            if key in existing_map:
-                existing = existing_map[key]
-                existing.price = listing.price
-                existing.area = listing.area
-                existing.available_from = listing.available_from
-                existing.district = listing.district
-                existing.water_included = listing.water_included
-                existing.water_price = listing.water_price
-                existing.electricity_included = listing.electricity_included
-                existing.floor_plan_url = listing.floor_plan_url
-                existing.lessor_name = listing.lessor_name
-                existing.is_private_lessor = listing.is_private_lessor
-                existing.is_active = True
-            else:
-                self.session.add(listing)
-                existing_map[key] = listing
-                new_count += 1
+            new_count += sum(1 for _, is_new in result if is_new)
 
         await self.session.commit()
         return new_count
