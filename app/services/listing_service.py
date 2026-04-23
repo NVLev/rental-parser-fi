@@ -18,6 +18,10 @@ class ListingService:
     async def upsert_listings(self, listings: List[Listing]) -> int:
         if not listings:
             return 0
+        seen: dict[tuple, Listing] = {}
+        for l in listings:
+            seen[(l.source, l.external_id)] = l
+        listings = list(seen.values())
 
         BATCH_SIZE = 1000
         new_count = 0
