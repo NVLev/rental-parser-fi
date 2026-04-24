@@ -47,6 +47,8 @@ class ListingService:
                     "available_from": l.available_from,
                     "lessor_name": l.lessor_name,
                     "is_private_lessor": l.is_private_lessor,
+                    "is_ara": l.is_ara,
+                    "is_student_home": l.is_student_home,
                     "published_at": l.published_at,
                     "is_active": True,
                 }
@@ -127,6 +129,8 @@ class ListingService:
         room_count: Optional[str] = None,
         water_included: Optional[bool] = None,
         is_private_lessor: Optional[bool] = None,
+        is_ara: Optional[bool] = None,
+        is_student_home: Optional[bool] = None,
         source: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
@@ -150,6 +154,10 @@ class ListingService:
             stmt = stmt.where(Listing.water_included == water_included)
         if is_private_lessor is not None:
             stmt = stmt.where(Listing.is_private_lessor == is_private_lessor)
+        if is_ara is not None:
+            stmt = stmt.where(Listing.is_ara == is_ara)
+        if is_student_home is not None:
+            stmt = stmt.where(Listing.is_student_home == is_student_home)
         if source:
             stmt = stmt.where(Listing.source == source)
 

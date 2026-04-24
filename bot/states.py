@@ -11,5 +11,7 @@ class SearchStates(StatesGroup):
     water = State()
     electricity = State()
     lessor = State()
+    ara = State()
+    student_home = State()
     source = State()
     confirm = State()
