@@ -42,6 +42,10 @@ class UserFilterService:
             existing.districts = districts
             existing.room_counts = room_counts
             existing.water_included_only = bool(data.get("water_included"))
+            existing.is_ara = data.get("is_ara")
+            existing.electricity_included_only = bool(data.get("electricity_included"))
+            existing.is_private_lessor = data.get("is_private_lessor")
+            existing.is_student_home = data.get("is_student_home")
             existing.is_active = True
             await self.session.commit()
             logger.info("Updated filter for user %s", user_id)
@@ -57,6 +61,10 @@ class UserFilterService:
                 districts=districts,
                 room_counts=room_counts,
                 water_included_only=bool(data.get("water_included")),
+                electricity_included_only=bool(data.get("electricity_included")),
+                is_private_lessor=data.get("is_private_lessor"),
+                is_ara=data.get("is_ara"),
+                is_student_home=data.get("is_student_home"),
             )
             self.session.add(user_filter)
             await self.session.commit()
@@ -101,6 +109,14 @@ class UserFilterService:
             stmt = stmt.where(Listing.area <= user_filter.area_max)
         if user_filter.water_included_only:
             stmt = stmt.where(Listing.water_included == True)
+        if user_filter.electricity_included_only:  # новое
+            stmt = stmt.where(Listing.electricity_included == True)
+        if user_filter.is_private_lessor is not None:  # новое
+            stmt = stmt.where(Listing.is_private_lessor == user_filter.is_private_lessor)
+        if user_filter.is_ara is not None:  # новое
+            stmt = stmt.where(Listing.is_ara == user_filter.is_ara)
+        if user_filter.is_student_home is not None:  # новое
+            stmt = stmt.where(Listing.is_student_home == user_filter.is_student_home)
         if user_filter.source and user_filter.source != "both":
             stmt = stmt.where(Listing.source == user_filter.source)
 
@@ -153,6 +169,14 @@ class UserFilterService:
             lines.append(f"📍 Districts: {f.districts}")
         if f.water_included_only:
             lines.append("💧 Water included only")
+        if f.electricity_included_only:
+            lines.append("⚡ Electricity included only")
+        if f.is_private_lessor is not None:
+            lines.append(f"👤 Lessor: {'private' if f.is_private_lessor else 'agency'}")
+        if f.is_ara is not None:
+            lines.append(f"🏛 ARA: {'only' if f.is_ara else 'excluded'}")
+        if f.is_student_home is not None:
+            lines.append(f"🎓 Student housing: {'only' if f.is_student_home else 'excluded'}")
         if f.source and f.source != "both":
             lines.append(f"🌐 Source: {f.source}")
         return "\n".join(lines)
