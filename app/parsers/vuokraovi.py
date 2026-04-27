@@ -106,6 +106,7 @@ class VuokraoviParser:
             }
         ]
 
+
     async def fetch_page(self, offset: int, code: str, name: str) -> Dict:
         url = f"{self.base_url}/v3/announcements/rental/search/listpage"
 
@@ -299,6 +300,17 @@ class VuokraoviParser:
             name = contact.get("officeName")
         return name, is_private
 
+    def _parse_living_form(self, details: Dict) -> tuple[Optional[bool], Optional[bool]]:
+        """Возвращает (is_ara, is_student_home) из livingFormType."""
+        living_form = details.get("residenceDetailsDTO", {}).get("livingFormType")
+        is_ara = living_form == "SUBSIDIZED"
+        is_student_home = living_form == "STUDENT_APARTMENT"
+        # Если NON_SUBSIDIZED — явно False, если поля нет — None
+        if living_form is None:
+            return None, None
+        return is_ara, is_student_home
+
+
     def _parse_datetime(self, value: Optional[str]) -> Optional[datetime]:
         if not value:
             return None
@@ -342,6 +354,7 @@ class VuokraoviParser:
                 details, fallback=item.get("addressLine2")
             )
             listing.lessor_name, listing.is_private_lessor = self._parse_lessor(details)
+            listing.is_ara, listing.is_student_home = self._parse_living_form(details)
 
         return listing
 
