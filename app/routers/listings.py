@@ -59,6 +59,8 @@ async def get_listings(
         None, description="ONE_ROOM / TWO_ROOMS / THREE_ROOMS"
     ),
     water_included: Optional[bool] = Query(None, description="Вода включена в аренду"),
+    is_ara: Optional[bool] = Query(None, description="Субсидированное жильё"),
+    is_student_home: Optional[bool] = Query(None, description="Студенческое жильё"),
     is_private_lessor: Optional[bool] = Query(
         None, description="True = частник, False = компания"
     ),
@@ -77,6 +79,8 @@ async def get_listings(
         room_count=room_count,
         water_included=water_included,
         is_private_lessor=is_private_lessor,
+        is_ara=is_ara,
+        is_student_home=is_student_home,
         source=source,
         limit=limit,
         offset=offset,
@@ -94,6 +98,8 @@ async def export_listings(
     room_count: Optional[str] = Query(None),
     water_included: Optional[bool] = Query(None),
     is_private_lessor: Optional[bool] = Query(None),
+    is_ara: Optional[bool] = Query(None),
+    is_student_home: Optional[bool] = Query(None),
     source: Optional[str] = Query(None),
 ):
     """Экспорт листингов в Excel с теми же фильтрами что и GET /listings/"""
@@ -107,8 +113,10 @@ async def export_listings(
         room_count=room_count,
         water_included=water_included,
         is_private_lessor=is_private_lessor,
+        is_ara=is_ara,
+        is_student_home=is_student_home,
         source=source,
-        limit=10000,  # на экспорт снимаем лимит
+        limit=12000,  # на экспорт снимаем лимит
         offset=0,
     )
 
