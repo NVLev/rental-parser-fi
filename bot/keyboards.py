@@ -73,6 +73,23 @@ def lessor_keyboard() -> InlineKeyboardMarkup:
     builder.adjust(3)
     return builder.as_markup()
 
+def ara_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ ARA only", callback_data="ara:true")
+    builder.button(text="❌ Exclude ARA", callback_data="ara:false")
+    builder.button(text="🔄 Any", callback_data="ara:any")
+    builder.adjust(3)
+    return builder.as_markup()
+
+def student_home_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🎓 Students only", callback_data="student:true")
+    builder.button(text="❌ Exclude students", callback_data="student:false")
+    builder.button(text="🔄 Any", callback_data="student:any")
+    builder.adjust(3)
+    return builder.as_markup()
+
+
 
 def confirm_search_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()

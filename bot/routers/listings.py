@@ -91,6 +91,8 @@ async def _show_listings(
             room_count=filters.get("room_count"),
             water_included=filters.get("water_included"),
             is_private_lessor=filters.get("is_private_lessor"),
+            is_ara=filters.get("is_ara"),
+            is_student_home=filters.get("is_student_home"),
             source=filters.get("source"),
             limit=page_size,
             offset=offset,
@@ -133,6 +135,8 @@ async def _send_excel(message: Message, filters: dict) -> None:
             room_count=filters.get("room_count"),
             water_included=filters.get("water_included"),
             is_private_lessor=filters.get("is_private_lessor"),
+            is_ara=filters.get("is_ara"),
+            is_student_home=filters.get("is_student_home"),
             source=filters.get("source"),
             limit=1000,
             offset=0,
@@ -163,6 +167,9 @@ def _format_listing(listing) -> str:
     lessor = (
         f"{'👤' if listing.is_private_lessor else '🏢'} {listing.lessor_name or '—'}"
     )
+    ara = "🏛 ARA" if listing.is_ara else ""
+    student = "🎓 Student" if listing.is_student_home else ""
+    badges = "  ".join(filter(None, [ara, student]))
 
     lines = [
         f"🏠 <b>{listing.room_structure or listing.room_count}</b> · {listing.area} m²",
@@ -171,6 +178,9 @@ def _format_listing(listing) -> str:
         f"💧 Water: {water}  ⚡ Electricity: {elec}",
         f"📅 Available: {listing.available_from or '—'}",
         f"{lessor}",
-        f"🔗 <a href='{listing.url}'>View listing</a>",
     ]
+    if badges:
+        lines.append(badges)
+    lines.append(f"🔗 <a href='{listing.url}'>View listing</a>")
     return "\n".join(lines)
+

@@ -153,6 +153,8 @@ class SatoParser:
             water_included=water_included,
             water_price=water_price,
             electricity_included=apt.get("flags", {}).get("electricityIncludedInRent"),
+            is_ara=apt.get("flags", {}).get("isAra"),
+            is_student_home=apt.get("flags", {}).get("studentHome"),
             floor_plan_url=self._get_floor_plan_url(apt.get("mediaAssets", [])),
             available_from=available_from,
             is_private_lessor=False,

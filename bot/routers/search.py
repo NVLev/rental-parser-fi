@@ -13,7 +13,7 @@ from bot.keyboards import (
     main_menu,
     room_count_keyboard,
     source_keyboard,
-    water_keyboard,
+    water_keyboard, ara_keyboard, student_home_keyboard,
 )
 from bot.states import SearchStates
 
@@ -183,10 +183,34 @@ async def set_lessor(callback: CallbackQuery, state: FSMContext) -> None:
     elif value == "agency":
         await state.update_data(is_private_lessor=False)
     await callback.message.edit_reply_markup()
+    await state.set_state(SearchStates.ara)
+    await callback.message.answer("ARA (state-subsidised housing)?", reply_markup=ara_keyboard())
+    await callback.answer()
+
+@router.callback_query(SearchStates.ara, F.data.startswith("ara:"))
+async def set_ara(callback: CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":")[1]
+    if value == "true":
+        await state.update_data(is_ara=True)
+    elif value == "false":
+        await state.update_data(is_ara=False)
+    await callback.message.edit_reply_markup()
+    await state.set_state(SearchStates.student_home)
+    await callback.message.answer("Student apartments?", reply_markup=student_home_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(SearchStates.student_home, F.data.startswith("student:"))
+async def set_student_home(callback: CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":")[1]
+    if value == "true":
+        await state.update_data(is_student_home=True)
+    elif value == "false":
+        await state.update_data(is_student_home=False)
+    await callback.message.edit_reply_markup()
     await state.set_state(SearchStates.source)
     await callback.message.answer("Data source?", reply_markup=source_keyboard())
     await callback.answer()
-
 
 @router.callback_query(SearchStates.source, F.data.startswith("source:"))
 async def set_source(callback: CallbackQuery, state: FSMContext) -> None:
@@ -239,6 +263,10 @@ def _format_filters(data: dict) -> str:
         lines.append(
             f"👤 Lessor: {'private' if data['is_private_lessor'] else 'agency'}"
         )
+    if "is_ara" in data:
+        lines.append(f"🏛 ARA: {'only' if data['is_ara'] else 'excluded'}")
+    if "is_student_home" in data:
+        lines.append(f"🎓 Student housing: {'only' if data['is_student_home'] else 'excluded'}")
     if data.get("source"):
         lines.append(f"🌐 Source: {data['source']}")
     if len(lines) == 1:

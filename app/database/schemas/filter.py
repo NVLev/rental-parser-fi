@@ -22,6 +22,9 @@ class UserFilterBase(BaseModel):
 
     water_included_only: bool = False
 
+    is_ara: Optional[bool] = None
+    is_student_home: Optional[bool] = None
+
 
 class UserFilterCreate(UserFilterBase):
     user_id: int

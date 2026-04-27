@@ -64,6 +64,10 @@ class Listing(Base):
     lessor_name: Mapped[Optional[str]] = mapped_column(String(250), nullable=True)
     is_private_lessor: Mapped[Optional[bool]]
 
+    # Субсидированные и студенческие квартиры
+    is_ara:Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    is_student_home:Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
     # Мета
     published_at: Mapped[Optional[datetime]] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
@@ -111,6 +115,10 @@ class UserFilter(Base):
 
     # Арендодатель
     is_private_lessor: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    # Субсидированные и студенческие квартиры
+    is_ara: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    is_student_home: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Состояние
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
