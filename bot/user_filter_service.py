@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Listing, SeenListing, UserFilter
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,8 @@ class UserFilterService:
         return True
 
     async def get_new_listings_for_user(
-        self, user_filter: UserFilter, limit: int = 10
+        self, user_filter: UserFilter,
+        limit: int = settings.parser.notification_limit,
     ) -> list[Listing]:
         """
         Возвращает активные объявления по фильтру пользователя,
@@ -137,8 +139,15 @@ class UserFilterService:
         # Исключаем уже виденные
         if seen_ids:
             stmt = stmt.where(Listing.id.not_in(seen_ids))
+        order_cols = []
+        if user_filter.price_max is not None:
+            order_cols.append(Listing.price.asc())
+        if user_filter.area_min is not None:
+            order_cols.append(Listing.area.desc())
+        if not order_cols:
+            order_cols.append(Listing.published_at.desc())
 
-        stmt = stmt.order_by(Listing.published_at.desc()).limit(limit)
+        stmt = stmt.order_by(*order_cols).limit(limit)
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

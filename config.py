@@ -34,6 +34,7 @@ class ParserConfig(BaseModel):
     request_delay_seconds: float = 1.5
     headless: bool = True  # Playwright
     concurrency: int = 10
+    notification_limit: int = 50
 
 
 class VuokraoviConfig(BaseModel):
