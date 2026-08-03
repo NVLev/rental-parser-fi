@@ -5,6 +5,7 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.routers import listings, search, start, subscription
@@ -36,9 +37,14 @@ async def main() -> None:
         listings.router,
         subscription.router,
     )
+    while True:
+        try:
+            logger.info("Starting bot...")
+            await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        except TelegramNetworkError:
+            logger.info("Нет доступа к Telegram, жду 5 сек...")
+            await asyncio.sleep(5)
 
-    logger.info("Starting bot...")
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 
 if __name__ == "__main__":
